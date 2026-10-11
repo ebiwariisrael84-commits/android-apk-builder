@@ -207,11 +207,31 @@ class MainActivity : AppCompatActivity() {
         page.addView(btn("Cancel",false){dashboard()},mp(12));setContentView(scroll)
     }
     private fun transactions(){
-        val(scroll,page)=root("Transactions","Recorded account activity")
-        val a=try{org.json.JSONArray(p.getString("transactions","[]"))}catch(_:Exception){org.json.JSONArray()}
-        if(a.length()==0)page.addView(card().apply{addView(txt("No transactions yet",16,ink,true));addView(txt("Activity will appear here.",13,muted,false,5))},mp(20))
-        else for(i in a.length()-1 downTo 0){val item=a.optJSONObject(i)?:continue;page.addView(card().apply{addView(txt(item.optString("type"),15,ink,true));addView(txt(item.optString("detail"),12,muted,false,4));addView(txt(money(item.optDouble("amount").toFloat()),16,green,true,8));addView(txt(item.optString("date"),11,muted,false,4))},mp(10))}
-        page.addView(btn("Back",false){dashboard()},mp(18));setContentView(scroll)
+        val(scroll,page)=root("Transactions","Cloud-synced account activity")
+        val token=cloudAccessToken ?: p.getString("cloud_access_token",null)
+        val uid=cloudUserId ?: p.getString("cloud_user_id",null)
+        val status=txt("Loading transactions…",13,muted,false,12);page.addView(status)
+        page.addView(btn("Back",false){dashboard()},mp(18))
+        setContentView(scroll)
+        if(token==null||uid==null){status.text="Please sign in to your cloud account.";return}
+        thread{
+            try{
+                val rows=cloud.fetchTransactions(token,uid)
+                runOnUiThread{
+                    status.text=if(rows.length()==0)"No cloud transactions yet." else "Recent transactions"
+                    for(i in 0 until rows.length()){
+                        val item=rows.optJSONObject(i)?:continue
+                        page.addView(card().apply{
+                            addView(txt(item.optString("transaction_type").replace('_',' ').replaceFirstChar{it.uppercase()},15,ink,true))
+                            addView(txt(item.optString("description"),12,muted,false,4))
+                            addView(txt(money(item.optDouble("amount").toFloat()),16,green,true,8))
+                            addView(txt("Status: "+item.optString("status"),12,muted,false,4))
+                            addView(txt(item.optString("created_at"),11,muted,false,4))
+                        },mp(10))
+                    }
+                }
+            }catch(e:Exception){runOnUiThread{status.text="Unable to load cloud transactions: "+(e.message ?: "Cloud error")}}
+        }
     }
     private fun profile(){
         val(scroll,page)=root("Your account","Personal details and settings")
