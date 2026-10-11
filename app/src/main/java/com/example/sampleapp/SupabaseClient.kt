@@ -63,6 +63,55 @@ class SupabaseClient(private val projectUrl: String, private val publishableKey:
         return if (rows.length() > 0) rows.getJSONObject(0) else JSONObject()
     }
 
+    fun updateProfile(accessToken: String, fullName: String, country: String, dateOfBirth: String, address: String, phone: String) {
+        val userId = request("GET", "/auth/v1/user", null, accessToken).json().optString("id")
+        request("PATCH", "/rest/v1/profiles?id=eq.$userId",
+            JSONObject().put("full_name", fullName).put("country", country).put("date_of_birth", dateOfBirth)
+                .put("address", address).put("phone", phone).toString(), accessToken)
+    }
+
+    fun uploadKycImage(accessToken: String, userId: String, kind: String, bytes: ByteArray, contentType: String): String {
+        if (bytes.isEmpty() || bytes.size > 8 * 1024 * 1024) throw ApiException(400, "Choose an image smaller than 8 MB.")
+        val path = userId + "/" + kind + "-" + System.currentTimeMillis() + ".jpg"
+        val encodedPath = path.split("/").joinToString("/") { java.net.URLEncoder.encode(it, "UTF-8").replace("+", "%20") }
+        var lastError: Exception? = null
+        for (attempt in 0..2) {
+            var connection: HttpURLConnection? = null
+            try {
+                connection = (URL(baseUrl + "/storage/v1/object/kyc-documents/" + encodedPath).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"; connectTimeout = 10000; readTimeout = 15000; doOutput = true
+                    setRequestProperty("apikey", publishableKey)
+                    setRequestProperty("Authorization", "Bearer $accessToken")
+                    setRequestProperty("Content-Type", contentType)
+                    setRequestProperty("x-upsert", "false")
+                }
+                connection.outputStream.use { it.write(bytes) }
+                val status = connection.responseCode
+                val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+                val body = stream?.bufferedReader()?.use { it.readText() } ?: ""
+                if (status in 200..299) return path
+                if ((status == 408 || status == 429 || status >= 500) && attempt < 2) {
+                    Thread.sleep(500L * (1L shl attempt)); continue
+                }
+                val message = try { JSONObject(body).optString("message", "KYC image upload failed (HTTP $status).") }
+                    catch (_: Exception) { "KYC image upload failed (HTTP $status)." }
+                throw ApiException(status, message)
+            } catch (e: ApiException) { throw e }
+            catch (e: Exception) {
+                lastError = e
+                if (attempt < 2) Thread.sleep(500L * (1L shl attempt))
+            } finally { connection?.disconnect() }
+        }
+        throw IOException("KYC image upload failed after 3 attempts.", lastError)
+    }
+
+    fun submitKyc(accessToken: String, userId: String, documentType: String, idPath: String, facePath: String) {
+        request("POST", "/rest/v1/kyc_submissions",
+            JSONObject().put("user_id", userId).put("document_type", documentType)
+                .put("id_image_path", idPath).put("face_image_path", facePath).put("status", "pending").toString(),
+            accessToken)
+    }
+
     fun fetchPlans(accessToken: String): JSONArray =
         JSONArray(request("GET", "/rest/v1/investment_plans?select=id,slug,name,icon,minimum_amount,fixed_profit_rate,is_active&is_active=eq.true&order=minimum_amount.asc", null, accessToken).body)
 
