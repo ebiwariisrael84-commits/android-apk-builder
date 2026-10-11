@@ -41,7 +41,6 @@ class MainActivity : AppCompatActivity() {
         window.decorView.systemUiVisibility=View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
         auth(false)
         val incoming=intent?.data
-        if(incoming?.scheme=="myinvest" && incoming.host=="oauth-callback") { handleOAuthCallback(incoming); return }
         if(incoming?.scheme=="myinvest" && incoming.host=="confirm-email") {
             val params=(incoming.query.orEmpty()+"&"+incoming.fragment.orEmpty()).split("&").mapNotNull { part ->
                 val pieces=part.split("=", limit=2)
@@ -78,13 +77,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        val incoming = intent.data
-        if (incoming?.scheme == "myinvest" && incoming.host == "oauth-callback") handleOAuthCallback(incoming)
-    }
-
     override fun onBackPressed() {
         if (!navigationStack.isEmpty()) {
             val previous = navigationStack.removeLast()
@@ -117,46 +109,6 @@ class MainActivity : AppCompatActivity() {
                 loadingDialog = null
             }
         }
-    }
-
-    private fun handleOAuthCallback(uri: Uri) {
-        val params = uri.fragment.orEmpty().split("&").mapNotNull { part ->
-            val pieces = part.split("=", limit = 2)
-            if (pieces.size == 2) pieces[0] to Uri.decode(pieces[1].replace("+", "%2B")) else null
-        }.toMap()
-        val error = params["error_description"] ?: params["error"]
-        val access = params["access_token"]
-        val refresh = params["refresh_token"]
-        if (!error.isNullOrBlank()) { auth(false); toast("Google sign-in failed: " + error.replace("+", " ")); return }
-        if (access.isNullOrBlank()) { auth(false); toast("Google sign-in did not return a session. Please try again."); return }
-        showLoading("Securing your Google sign-in…")
-        thread {
-            try {
-                val user = cloud.fetchCurrentUser(access)
-                val session = SupabaseClient.Session(access, refresh.orEmpty(), user.optString("id"), user.optString("email"))
-                val profile = cloud.fetchProfile(session.accessToken, session.userId)
-                runOnUiThread {
-                    hideLoading()
-                    if (profile.optString("account_status") != "approved") {
-                        auth(false)
-                        toast("Your account is " + profile.optString("account_status", "pending") + ". Dashboard access requires administrator approval.")
-                    } else {
-                        saveSession(session)
-                        cloudRole = profile.optString("role", "investor")
-                        p.edit().putString("account_name", profile.optString("full_name", "Investor")).putString("account_email", session.email).putBoolean("logged", true).apply()
-                        loadCloudWalletThenDashboard()
-                    }
-                }
-            } catch (e: Exception) {
-                runOnUiThread { hideLoading(); auth(false); toast("Google sign-in could not be completed: " + (e.message ?: "Please try again.")) }
-            }
-        }
-    }
-
-    private fun startGoogleSignIn() {
-        if (!cloud.isConfigured()) { toast("Cloud connection is not configured. Please rebuild after adding the Supabase GitHub secrets."); return }
-        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(cloud.googleOAuthUrl()))) }
-        catch (_: Exception) { toast("Could not open Google sign-in. Please try again.") }
     }
 
     private fun saveSession(session:SupabaseClient.Session) {
@@ -197,8 +149,6 @@ class MainActivity : AppCompatActivity() {
         page.addView(txt("Your money, clearly in view",15,green,true,10))
         page.addView(card().apply{
             addView(name);addView(email,mp(12));addView(pass,mp(12))
-            addView(btn("Continue with Google",false){ startGoogleSignIn() },mp(14))
-            addView(txt("Or continue with email",12,muted,false,12))
             addView(btn(if(register)"Create account" else "Sign in",true){
                 val n=name.text.toString().trim();val e=email.text.toString().trim().lowercase(Locale.ROOT);val pw=pass.text.toString()
                 when {
