@@ -33,6 +33,7 @@ class MainActivity : AppCompatActivity() {
     private var marketValues=floatArrayOf(); private var marketStatus="Loading market data…"; private var marketChange=""
     private val navigationStack = java.util.ArrayDeque<View>()
     private var activePage: View? = null
+    private var lastScrollView: ScrollView? = null
     private var loadingDialog: ProgressDialog? = null
     private var loadingGeneration: Int = 0
     override fun onCreate(savedInstanceState:Bundle?) {
@@ -129,7 +130,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun root(title:String,sub:String?=null):Pair<LinearLayout,LinearLayout>{
+    private fun root(title:String,sub:String?=null,showPageTitle:Boolean=true):Pair<LinearLayout,LinearLayout>{
         val shell=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(bg)}
         val header=LinearLayout(this).apply{
             orientation=LinearLayout.HORIZONTAL
@@ -164,8 +165,10 @@ class MainActivity : AppCompatActivity() {
         shell.addView(header,LinearLayout.LayoutParams(-1,-2))
         val page=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(20),dp(20),dp(28));setBackgroundColor(bg)}
         val scroll=ScrollView(this).apply{isFillViewport=true;addView(page)}
+        lastScrollView=scroll
         shell.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
-        page.addView(txt(title,26,ink,true));if(sub!=null)page.addView(txt(sub,14,muted,false,7))
+        if(showPageTitle) page.addView(txt(title,26,ink,true))
+        if(sub!=null)page.addView(txt(sub,14,muted,false,7))
         return shell to page
     }
 
@@ -286,7 +289,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun dashboard(){
         val first=p.getString("account_name","Investor")?.substringBefore(" ")?: "Investor"
-        val(scroll,page)=root("Your dashboard","Welcome, "+first)
+        val(scroll,page)=root("Your dashboard","Welcome, "+first,false)
         val deposited=amt("deposited");val capital=amt("capital");val profits=amt("profits");val withdrawals=amt("withdrawals")
         val available=(deposited-capital-withdrawals).coerceAtLeast(0f)
         page.addView(card().apply{
@@ -296,12 +299,72 @@ class MainActivity : AppCompatActivity() {
         },mp(22))
         page.addView(txt("Quick actions",19,ink,true,24))
         page.addView(LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;addView(btn("Withdraw",true){withdraw()},LinearLayout.LayoutParams(0,dp(48),1f));addView(gap(10),LinearLayout.LayoutParams(dp(10),1));addView(btn("Investment plans",false){plans()},LinearLayout.LayoutParams(0,dp(48),1f))},mp(12))
-        page.addView(txt("S&P 500",19,ink,true,24))
-        val market=card();market.addView(txt("S&P 500 index",16,ink,true));val status=txt(marketStatus,12,muted,false,4);market.addView(status)
-        val chart=MarketLine(this);market.addView(chart,LinearLayout.LayoutParams(-1,dp(135)).apply{topMargin=dp(8)});val change=txt(marketChange,12,green,true,4);market.addView(change);page.addView(market,mp(12))
-        loadMarket{s,v,c->marketStatus=s;marketValues=v;marketChange=c;status.text=s;change.text=c;chart.invalidate()}
-        page.addView(txt("Your investment",19,ink,true,24))
-        page.addView(card().apply{val active=p.getString("active_plan",null);addView(txt(active?:"No active plan",17,ink,true));addView(txt(if(active==null)"Choose a plan to get started." else "Selected plan",13,muted,false,5));addView(btn(if(active==null)"Explore plans" else "View plans",false){plans()},mp(12))},mp(12))
+        page.addView(txt("Top 5 U.S. stocks",19,ink,true,24))
+        val market=card()
+        market.addView(txt("U.S. market watchlist",16,ink,true))
+        val status=txt("Loading latest available stock quotes…",12,muted,false,4);market.addView(status)
+        val stockRows=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
+        market.addView(stockRows,mp(8))
+        page.addView(market,mp(12))
+        loadTopStocks { message, quotes ->
+            status.text=message
+            stockRows.removeAllViews()
+            if(quotes.isEmpty()) stockRows.addView(txt("Stock quotes are temporarily unavailable. Pull down to try again.",12,muted,false,8))
+            quotes.forEach { q ->
+                stockRows.addView(LinearLayout(this).apply {
+                    orientation=LinearLayout.HORIZONTAL;gravity=android.view.Gravity.CENTER_VERTICAL
+                    setPadding(0,dp(10),0,dp(10))
+                    addView(LinearLayout(this@MainActivity).apply {
+                        orientation=LinearLayout.VERTICAL
+                        addView(txt(q.symbol,14,ink,true))
+                        addView(txt(q.name,11,muted,false,3))
+                    },LinearLayout.LayoutParams(0,-2,1f))
+                    addView(txt(money(q.price),14,ink,true))
+                    addView(txt(String.format(Locale.US,"%+.2f%%",q.changePct),12,if(q.changePct>=0)green else Color.rgb(190,65,65),true,0).apply { setPadding(dp(10),0,0,0) })
+                })
+                stockRows.addView(View(this@MainActivity).apply{setBackgroundColor(Color.rgb(235,239,237));layoutParams=LinearLayout.LayoutParams(-1,dp(1))})
+            }
+        }
+        page.addView(txt("Your active investments",19,ink,true,24))
+        val investmentContainer=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
+        investmentContainer.addView(card().apply{addView(txt("Loading active investments from your cloud account…",13,muted,false))},mp(8))
+        page.addView(investmentContainer)
+        val token=cloudAccessToken ?: p.getString("cloud_access_token",null)
+        if(token!=null) thread {
+            try {
+                val investments=cloud.fetchInvestments(token)
+                runOnUiThread {
+                    investmentContainer.removeAllViews()
+                    val active=(0 until investments.length()).mapNotNull{investments.optJSONObject(it)}.filter{it.optString("status")=="active"}
+                    if(active.isEmpty()) {
+                        investmentContainer.addView(card().apply{
+                            addView(txt("No active investments yet",16,ink,true))
+                            addView(txt("Once the administrator approves an investment, it will appear here automatically.",12,muted,false,5))
+                            addView(btn("Explore investment plans",false){plans()},mp(10))
+                        },mp(8))
+                    } else active.forEach { inv ->
+                        val plan=inv.optJSONObject("investment_plans")
+                        val planName=plan?.optString("name")?.takeIf{!it.isNullOrBlank()} ?: inv.optString("plan_name","Investment plan")
+                        val planType=plan?.optString("slug")?.takeIf{!it.isNullOrBlank()} ?: planName
+                        val principal=inv.optDouble("principal_amount",0.0).toFloat()
+                        val projected=inv.optDouble("fixed_profit_amount",principal*0.60).toFloat()
+                        investmentContainer.addView(card().apply{
+                            addView(txt(planName,17,ink,true))
+                            addView(txt("Investment type: "+planType.replace("-"," ").uppercase(Locale.US),12,muted,false,5))
+                            addView(txt("Active amount: "+money(principal),15,ink,true,10))
+                            addView(txt("Illustrative 60% profit estimate: "+money(projected),13,green,true,6))
+                            addView(txt("Estimate only; not a guaranteed return or a credited/withdrawable profit balance.",11,muted,false,5))
+                        },mp(8))
+                    }
+                }
+            } catch(e:Exception) {
+                runOnUiThread {
+                    investmentContainer.removeAllViews()
+                    investmentContainer.addView(card().apply{addView(txt("Could not sync active investments: "+(e.message ?: "Cloud error"),12,muted,false))},mp(8))
+                }
+            }
+        }
+        enablePullToRefresh { loadCloudWalletThenDashboard() }
         page.addView(txt("Account",19,ink,true,24))
         page.addView(LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;addView(btn("Transactions",false){transactions()},LinearLayout.LayoutParams(0,dp(46),1f));addView(gap(8),LinearLayout.LayoutParams(dp(8),1));addView(btn("Profile",false){profile()},LinearLayout.LayoutParams(0,dp(46),1f))},mp(12))
         showPage(scroll, true)
@@ -768,33 +831,53 @@ class MainActivity : AppCompatActivity() {
         a.put(JSONObject().put("type",type).put("detail",detail).put("amount",value.toDouble()).put("date",java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",Locale.US).format(java.util.Date())))
         p.edit().putString("transactions",a.toString()).apply()
     }
-    private fun loadMarket(done:(String,FloatArray,String)->Unit){thread{
-        var lastError:Exception?=null
-        for(attempt in 0..2){
+    private data class StockQuote(val symbol:String,val name:String,val price:Float,val changePct:Float)
+    private fun loadTopStocks(done:(String,List<StockQuote>)->Unit){thread{
+        val stocks=listOf("AAPL" to "Apple","MSFT" to "Microsoft","NVDA" to "NVIDIA","AMZN" to "Amazon","GOOGL" to "Alphabet")
+        val quotes=mutableListOf<StockQuote>()
+        stocks.forEach { (symbol,name) ->
             var connection:HttpURLConnection?=null
-            try{
-                connection=URL("https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?range=1mo&interval=1d").openConnection() as HttpURLConnection
+            try {
+                connection=URL("https://query1.finance.yahoo.com/v8/finance/chart/"+symbol+"?range=5d&interval=1d").openConnection() as HttpURLConnection
                 connection.connectTimeout=7000;connection.readTimeout=7000;connection.setRequestProperty("User-Agent","Mozilla/5.0")
-                val status=connection.responseCode
-                if(status !in 200..299){
-                    if((status==408||status==429||status>=500)&&attempt<2){Thread.sleep(500L*(1L shl attempt));continue}
-                    throw java.io.IOException("Market data server returned HTTP "+status)
-                }
+                if(connection.responseCode !in 200..299) throw java.io.IOException("HTTP "+connection.responseCode)
                 val body=connection.inputStream.bufferedReader().use{it.readText()}
                 val result=JSONObject(body).getJSONObject("chart").getJSONArray("result").getJSONObject(0)
                 val closes=result.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0).getJSONArray("close")
-                val list=mutableListOf<Float>();for(i in 0 until closes.length())if(!closes.isNull(i))list.add(closes.getDouble(i).toFloat())
-                val values=list.toFloatArray();val first=values.firstOrNull()?:0f;val last=values.lastOrNull()?:0f;val pct=if(first>0)(last-first)/first*100 else 0f
-                runOnUiThread{done("Latest available market data • "+String.format(Locale.US,"%.2f",last),values,"1-month change: "+String.format(Locale.US,"%+.2f%%",pct))}
-                return@thread
-            }catch(e:Exception){
-                lastError=e
-                if(attempt<2)try{Thread.sleep(500L*(1L shl attempt))}catch(_:InterruptedException){Thread.currentThread().interrupt();break}
-            }finally{connection?.disconnect()}
+                val values=mutableListOf<Float>()
+                for(i in 0 until closes.length()) if(!closes.isNull(i)) values.add(closes.getDouble(i).toFloat())
+                if(values.isNotEmpty()) {
+                    val first=values.first();val last=values.last()
+                    quotes.add(StockQuote(symbol,name,last,if(first>0f)(last-first)/first*100f else 0f))
+                }
+            } catch(_:Exception) {
+                // One unavailable symbol should not block the remaining quotes.
+            } finally { connection?.disconnect() }
         }
-        runOnUiThread{done("Market data unavailable after 3 attempts. Check internet connection.",floatArrayOf(),"")}
+        runOnUiThread {
+            done(if(quotes.isEmpty())"Latest available quotes unavailable • pull down to retry" else "Latest available quotes • 5-day change • delayed/subject to provider availability",quotes)
+        }
     }}
-    private inner class MarketLine(context:android.content.Context):View(context){
+    private fun enablePullToRefresh(onRefresh:()->Unit) {
+        val scroll=lastScrollView ?: return
+        var startY=0f
+        var triggered=false
+        scroll.setOnTouchListener { _, event ->
+            when(event.action) {
+                android.view.MotionEvent.ACTION_DOWN -> { startY=event.y;triggered=false }
+                android.view.MotionEvent.ACTION_UP -> {
+                    val distance=event.y-startY
+                    if(!triggered && scroll.scrollY==0 && distance>dp(100)) {
+                        triggered=true
+                        toast("Refreshing cloud account and market data…")
+                        onRefresh()
+                    }
+                }
+            }
+            false
+        }
+    }
+    private inner class MarketLine(context:android.content.Context):View(this){
         private val line=Paint(Paint.ANTI_ALIAS_FLAG).apply{color=green;strokeWidth=dp(3).toFloat();style=Paint.Style.STROKE;strokeCap=Paint.Cap.ROUND;strokeJoin=Paint.Join.ROUND}
         private val grid=Paint(Paint.ANTI_ALIAS_FLAG).apply{color=Color.rgb(229,235,231);strokeWidth=dp(1).toFloat()}
         override fun onDraw(canvas:Canvas){super.onDraw(canvas);val l=dp(4).toFloat();val r=width-dp(4).toFloat();val t=dp(12).toFloat();val b=height-dp(12).toFloat()
