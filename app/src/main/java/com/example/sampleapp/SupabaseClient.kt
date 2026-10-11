@@ -17,6 +17,12 @@ class SupabaseClient(private val projectUrl: String, private val publishableKey:
 
     fun isConfigured() = baseUrl.startsWith("https://") && publishableKey.isNotBlank()
 
+    fun googleOAuthUrl(): String = baseUrl + "/auth/v1/authorize?provider=google&redirect_to=" +
+        java.net.URLEncoder.encode("myinvest://oauth-callback", "UTF-8")
+
+    fun fetchCurrentUser(accessToken: String): JSONObject =
+        request("GET", "/auth/v1/user", null, accessToken).json()
+
     fun signUp(email: String, password: String, fullName: String) = request(
         "POST", "/auth/v1/signup?redirect_to=" +
             java.net.URLEncoder.encode("myinvest://confirm-email", "UTF-8"),
