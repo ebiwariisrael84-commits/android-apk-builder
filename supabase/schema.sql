@@ -252,6 +252,8 @@ drop policy if exists "audit log admin read only" on public.admin_audit_log;
 create policy "audit log admin read only" on public.admin_audit_log for select to authenticated using (public.is_admin());
 revoke insert, update, delete on public.admin_audit_log from authenticated;
 
+revoke all on function public.admin_adjust_wallet(uuid,text,numeric,text) from public, anon;
+revoke all on function public.admin_set_profile_status(uuid,text,text) from public, anon;
 grant execute on function public.admin_adjust_wallet(uuid,text,numeric,text) to authenticated;
 grant execute on function public.admin_set_profile_status(uuid,text,text) to authenticated;
 
