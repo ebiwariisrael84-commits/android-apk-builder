@@ -43,26 +43,17 @@ jobs:
         unzip -q /tmp/gradle-8.0-bin.zip -d /tmp
         echo "/tmp/gradle-8.0/bin" >> "$GITHUB_PATH"
 
-    - name: Build with Gradle
-      run: gradle build -PSUPABASE_URL="$SUPABASE_URL" -PSUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+    - name: Run unit tests
+      run: gradle testDebugUnitTest -PSUPABASE_URL="$SUPABASE_URL" -PSUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
 
     - name: Build Debug APK
       run: gradle assembleDebug -PSUPABASE_URL="$SUPABASE_URL" -PSUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
-
-    - name: Build Release APK
-      run: gradle assembleRelease -PSUPABASE_URL="$SUPABASE_URL" -PSUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
 
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
       with:
         name: app-debug
         path: app/build/outputs/apk/debug/app-debug.apk
-
-    - name: Upload Signed Release APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: app-release
-        path: app/build/outputs/apk/release/app-release.apk
 
     - name: Upload Build Reports
       uses: actions/upload-artifact@v4
