@@ -10,6 +10,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
     steps:
     - uses: actions/checkout@v4
@@ -37,13 +40,13 @@ jobs:
         echo "/tmp/gradle-8.0/bin" >> "$GITHUB_PATH"
 
     - name: Build with Gradle
-      run: gradle build
+      run: gradle build -PSUPABASE_URL="$SUPABASE_URL" -PSUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
 
     - name: Build Debug APK
-      run: gradle assembleDebug
+      run: gradle assembleDebug -PSUPABASE_URL="$SUPABASE_URL" -PSUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
 
     - name: Build Release APK
-      run: gradle assembleRelease
+      run: gradle assembleRelease -PSUPABASE_URL="$SUPABASE_URL" -PSUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
 
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
