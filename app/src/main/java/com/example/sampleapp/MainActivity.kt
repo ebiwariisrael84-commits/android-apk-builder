@@ -1,5 +1,6 @@
 package com.example.sampleapp
 
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -28,6 +29,8 @@ class MainActivity : AppCompatActivity() {
     @Volatile private var cloudRole: String = "investor"
     private var selectedIdImageUri: Uri? = null
     private var selectedFaceImageUri: Uri? = null
+    private var selectedAvatarImageUri: Uri? = null
+    @Volatile private var kycApproved: Boolean = false
     private val ink=Color.rgb(26,39,55); private val muted=Color.rgb(111,124,139)
     private val green=Color.rgb(15,130,88); private val pale=Color.rgb(235,246,240); private val bg=Color.rgb(247,249,248)
     private var marketValues=floatArrayOf(); private var marketStatus="Loading market data…"; private var marketChange=""
@@ -192,17 +195,17 @@ class MainActivity : AppCompatActivity() {
     }
     private fun auth(register:Boolean){
         val(scroll,page)=root(if(register)"Create account" else "Welcome back",if(register)"Create your Evercrest Capital account" else "Sign in securely to your cloud account")
-        val name=input("Full name").apply{visibility=if(register)View.VISIBLE else View.GONE}
+        val username=input("Username").apply{visibility=if(register)View.VISIBLE else View.GONE}
         val email=input("Email address",InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS)
         val pass=input("Password",InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
         page.addView(txt("Your money, clearly in view",15,green,true,10))
         page.addView(card().apply{
-            addView(name);addView(email,mp(12));addView(pass,mp(12))
+            addView(username);addView(email,mp(12));addView(pass,mp(12))
             addView(btn(if(register)"Create account" else "Sign in",true){
-                val n=name.text.toString().trim();val e=email.text.toString().trim().lowercase(Locale.ROOT);val pw=pass.text.toString()
+                val n=username.text.toString().trim();val e=email.text.toString().trim().lowercase(Locale.ROOT);val pw=pass.text.toString()
                 when {
                     !cloud.isConfigured()->toast("Cloud connection is not configured. Please rebuild after adding the Supabase GitHub secrets.")
-                    register&&n.length<2->toast("Enter your full name.")
+                    register&&!n.matches(Regex("[A-Za-z0-9_.-]{3,24}"))->toast("Username must be 3–24 characters using letters, numbers, dot, underscore or hyphen.")
                     !e.contains("@")||!e.contains(".")->toast("Enter a valid email.")
                     pw.length<8->toast("Password must contain at least 8 characters.")
                     else->{
@@ -223,9 +226,9 @@ class MainActivity : AppCompatActivity() {
                                             saveSession(session)
                                             if(profile.optString("account_status")=="approved") {
                                                 cloudRole=profile.optString("role","investor")
-                                                p.edit().putString("account_name",profile.optString("full_name",n)).putString("account_email",e).putBoolean("logged",true).apply()
-                                                loadCloudWalletThenDashboard()
-                                            } else { toast("Account created. Administrator approval is required before dashboard access."); auth(false) }
+                                                p.edit().putString("account_name",profile.optString("username",n)).putString("account_email",e).putBoolean("logged",true).apply()
+                                                routeToKycOrDashboard(session, profile.optString("username", n))
+                                            } else { toast("Account created. Confirm your email, then wait for administrator account approval."); auth(false) }
                                         }
                                     }
                                 } else {
@@ -233,11 +236,12 @@ class MainActivity : AppCompatActivity() {
                                     val profile=cloud.fetchProfile(session.accessToken,session.userId)
                                     runOnUiThread {
                                         if(profile.optString("account_status")!="approved") {
-                                            toast("Your account is "+profile.optString("account_status","pending")+". Please wait for administrator approval.")
+                                            toast("Your account is "+profile.optString("account_status","pending")+". Please confirm your email and wait for administrator approval.")
                                         } else {
                                             saveSession(session);cloudRole=profile.optString("role","investor")
-                                            p.edit().putString("account_name",profile.optString("full_name","Investor")).putString("account_email",session.email).putBoolean("logged",true).apply()
-                                            loadCloudWalletThenDashboard()
+                                            val displayName=profile.optString("username").ifBlank { profile.optString("full_name","Investor") }
+                                            p.edit().putString("account_name",displayName).putString("account_email",session.email).putBoolean("logged",true).apply()
+                                            routeToKycOrDashboard(session, displayName)
                                         }
                                     }
                                 }
@@ -288,9 +292,158 @@ class MainActivity : AppCompatActivity() {
         showPage(scroll)
     }
 
+    private fun routeToKycOrDashboard(session: SupabaseClient.Session, displayName: String) {
+        saveSession(session)
+        val token = session.accessToken
+        thread {
+            try {
+                val latestStatus = if (cloudRole == "admin") "approved" else cloud.fetchLatestKycStatus(token, session.userId)
+                runOnUiThread {
+                    kycApproved = cloudRole == "admin" || latestStatus == "approved"
+                    if (kycApproved) loadCloudWalletThenDashboard()
+                    else kycOnboardingScreen(latestStatus, displayName)
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    kycApproved = false
+                    toast("Could not check identity verification status: " + (e.message ?: "Cloud error"))
+                    kycOnboardingScreen("not_submitted", displayName)
+                }
+            }
+        }
+    }
+
+    private fun kycOnboardingScreen(status: String, displayName: String) {
+        val (screen, page) = root("Identity verification", "Complete verification before accessing dashboard features.")
+        page.addView(txt("Welcome, " + displayName, 20, ink, true, 12))
+        val message = when (status) {
+            "pending" -> "Your KYC documents have been submitted and are waiting for administrator review. Dashboard features remain locked until approval."
+            "rejected" -> "Your previous verification was rejected. Review your details and submit a new verification."
+            "resubmission_required" -> "The administrator requested a clearer or corrected submission. Please submit your verification again."
+            else -> "Your account email is verified and your account is approved. Complete the identity details and upload your ID and face photo. The administrator must approve your KYC before dashboard access is enabled."
+        }
+        page.addView(card().apply {
+            addView(txt("KYC review status: " + status.replace('_', ' ').uppercase(Locale.US), 14, green, true))
+            addView(txt(message, 13, muted, false, 8))
+        }, mp(18))
+        if (status != "pending") {
+            val legalName = input("Full legal name")
+            val country = input("Country")
+            val dob = input("Date of birth (YYYY-MM-DD)")
+            val address = input("Residential address")
+            val phone = input("Phone number")
+            val idType = Spinner(this).apply {
+                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item,
+                    arrayOf("National ID", "Passport", "Driver's licence", "Voter's card"))
+            }
+            page.addView(card().apply {
+                addView(txt("Personal information", 16, ink, true))
+                addView(legalName, mp(10)); addView(country, mp(8)); addView(dob, mp(8))
+                addView(address, mp(8)); addView(phone, mp(8))
+                addView(txt("Identity document type", 13, muted, true, 12)); addView(idType, mp(4))
+            }, mp(14))
+            page.addView(card().apply {
+                addView(txt("Identity documents", 16, ink, true))
+                addView(txt("Upload a clear government-issued ID image and a separate face/passport photo. These files are stored in private cloud storage.", 12, muted, false, 6))
+                addView(btn("Choose ID image", false) { pickKycImage(1001) }, mp(10))
+                addView(txt(if (selectedIdImageUri == null) "No ID image selected" else "ID image selected", 12, green, true, 4))
+                addView(btn("Choose face/passport photo", false) { pickKycImage(1002) }, mp(8))
+                addView(txt(if (selectedFaceImageUri == null) "No face photo selected" else "Face photo selected", 12, green, true, 4))
+                addView(btn("Submit KYC for approval", true) {
+                    val token = cloudAccessToken ?: p.getString("cloud_access_token", null)
+                    val uid = cloudUserId ?: p.getString("cloud_user_id", null)
+                    val legal = legalName.text.toString().trim()
+                    val c = country.text.toString().trim()
+                    val d = dob.text.toString().trim()
+                    val a = address.text.toString().trim()
+                    val ph = phone.text.toString().trim()
+                    val idUri = selectedIdImageUri
+                    val faceUri = selectedFaceImageUri
+                    if (token == null || uid == null) toast("Please sign in again.")
+                    else if (legal.length < 2 || c.isBlank() || !d.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) || a.isBlank() || ph.isBlank()) {
+                        toast("Complete all personal details. Use YYYY-MM-DD for date of birth.")
+                    } else if (idUri == null || faceUri == null) toast("Choose both the ID image and face photo.")
+                    else thread {
+                        try {
+                            cloud.updateProfile(token, legal, c, d, a, ph)
+                            val idBytes = contentResolver.openInputStream(idUri)?.use { it.readBytes() } ?: throw Exception("Could not read ID image.")
+                            val faceBytes = contentResolver.openInputStream(faceUri)?.use { it.readBytes() } ?: throw Exception("Could not read face image.")
+                            val idPath = cloud.uploadKycImage(token, uid, "id", idBytes, contentResolver.getType(idUri) ?: "image/jpeg")
+                            val facePath = cloud.uploadKycImage(token, uid, "face", faceBytes, contentResolver.getType(faceUri) ?: "image/jpeg")
+                            cloud.submitKyc(token, uid, idType.selectedItem.toString(), idPath, facePath)
+                            runOnUiThread {
+                                selectedIdImageUri = null; selectedFaceImageUri = null
+                                kycApproved = false
+                                toast("KYC submitted. Dashboard access will open after administrator approval.")
+                                kycOnboardingScreen("pending", displayName)
+                            }
+                        } catch (e: Exception) {
+                            runOnUiThread { toast("KYC submission failed: " + (e.message ?: "Cloud error")) }
+                        }
+                    }
+                }, mp(14))
+            }, mp(12))
+        }
+        page.addView(btn("Refresh verification status", false) {
+            val token = cloudAccessToken ?: p.getString("cloud_access_token", null)
+            val uid = cloudUserId ?: p.getString("cloud_user_id", null)
+            if (token == null || uid == null) { auth(false); return@btn }
+            thread {
+                try {
+                    val current = cloud.fetchLatestKycStatus(token, uid)
+                    runOnUiThread {
+                        if (current == "approved") { kycApproved = true; loadCloudWalletThenDashboard() }
+                        else kycOnboardingScreen(current, displayName)
+                    }
+                } catch (e: Exception) { runOnUiThread { toast("Could not refresh verification: " + (e.message ?: "Cloud error")) } }
+            }
+        }, mp(14))
+        page.addView(btn("Sign out", false) {
+            p.edit().remove("cloud_access_token").remove("cloud_refresh_token").remove("cloud_user_id").putBoolean("logged", false).apply()
+            cloudAccessToken = null; cloudRefreshToken = null; cloudUserId = null; kycApproved = false
+            auth(false)
+        }, mp(10))
+        showPage(screen, true)
+    }
+
     private fun dashboard(){
+        if (!kycApproved && cloudRole != "admin") {
+            kycOnboardingScreen("not_submitted", p.getString("account_name", "Investor") ?: "Investor")
+            return
+        }
         val first=p.getString("account_name","Investor")?.substringBefore(" ")?: "Investor"
-        val(scroll,page)=root("Your dashboard","Welcome, "+first,false)
+        val(scroll,page)=root("Your dashboard",null,false)
+        val welcomeRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            addView(txt("Welcome, " + first, 20, ink, true), LinearLayout.LayoutParams(0, -2, 1f))
+            val avatar = ImageView(this@MainActivity).apply {
+                setImageResource(R.drawable.ic_launcher_foreground)
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(Color.rgb(228, 235, 231)); shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setStroke(dp(1), Color.rgb(204, 214, 208))
+                }
+                clipToOutline = true
+                setPadding(dp(5), dp(5), dp(5), dp(5))
+                setOnClickListener { profile() }
+            }
+            addView(avatar, LinearLayout.LayoutParams(dp(46), dp(46)))
+            val tokenForAvatar = cloudAccessToken ?: p.getString("cloud_access_token", null)
+            val uidForAvatar = cloudUserId ?: p.getString("cloud_user_id", null)
+            if (tokenForAvatar != null && uidForAvatar != null) thread {
+                try {
+                    val profileData = cloud.fetchProfileDetails(tokenForAvatar, uidForAvatar)
+                    val path = profileData.optString("avatar_image_path")
+                    if (path.isNotBlank()) {
+                        val signed = cloud.signedKycUrl(tokenForAvatar, path)
+                        val bitmap = URL(signed).openStream().use { BitmapFactory.decodeStream(it) }
+                        if (bitmap != null) runOnUiThread { avatar.setImageBitmap(bitmap); avatar.setPadding(0,0,0,0) }
+                    }
+                } catch (_: Exception) { }
+            }
+        }
+        page.addView(welcomeRow, mp(8))
         val deposited=amt("deposited");val capital=amt("capital");val profits=amt("profits");val withdrawals=amt("withdrawals")
         val available=(deposited-capital-withdrawals).coerceAtLeast(0f)
         page.addView(card().apply{
@@ -477,6 +630,21 @@ class MainActivity : AppCompatActivity() {
         page.addView(card().apply{
             addView(txt(p.getString("account_name","Investor")?:"Investor",19,ink,true))
             addView(txt(p.getString("account_email","")?:"",14,muted,false,5))
+            addView(btn("Choose profile photo",false){pickKycImage(1003)},mp(10))
+            addView(txt(if(selectedAvatarImageUri==null)"Profile photo: current saved image" else "New profile photo selected",12,green,true,4))
+            addView(btn("Upload and save profile photo",true){
+                val avatarUri=selectedAvatarImageUri
+                if(token==null||uid==null) toast("Please sign in again.")
+                else if(avatarUri==null) toast("Choose a profile photo first.")
+                else thread {
+                    try {
+                        val bytes=contentResolver.openInputStream(avatarUri)?.use{it.readBytes()}?:throw Exception("Could not read profile image.")
+                        val path=cloud.uploadKycImage(token,uid,"avatar",bytes,contentResolver.getType(avatarUri)?: "image/jpeg")
+                        cloud.updateAvatarPath(token,path)
+                        runOnUiThread { selectedAvatarImageUri=null;toast("Profile photo saved.");profile() }
+                    } catch(e:Exception) { runOnUiThread { toast("Profile photo upload failed: "+(e.message ?: "Cloud error")) } }
+                }
+            },mp(8))
             addView(profileStatus)
             addView(txt("Personal details",16,ink,true,14))
             addView(fullName,mp(8));addView(country,mp(8));addView(dob,mp(8));addView(address,mp(8));addView(phone,mp(8))
@@ -525,7 +693,7 @@ class MainActivity : AppCompatActivity() {
         page.addView(btn("Sign out",false){
             val current=cloudAccessToken
             p.edit().remove("cloud_access_token").remove("cloud_refresh_token").remove("cloud_user_id").putBoolean("logged",false).apply()
-            cloudAccessToken=null;cloudRefreshToken=null;cloudUserId=null
+            cloudAccessToken=null;cloudRefreshToken=null;cloudUserId=null;kycApproved=false
             thread{try{if(current!=null)cloud.signOut(current)}catch(_:Exception){}}
             auth(false)
         },mp(18))
@@ -555,6 +723,7 @@ class MainActivity : AppCompatActivity() {
         if(resultCode==RESULT_OK&&data?.data!=null){
             if(requestCode==1001) selectedIdImageUri=data.data
             if(requestCode==1002) selectedFaceImageUri=data.data
+            if(requestCode==1003) selectedAvatarImageUri=data.data
             profile()
         }
     }
