@@ -23,6 +23,13 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
+    - name: Validate Supabase build configuration
+      shell: bash
+      run: |
+        test -n "$SUPABASE_URL" || { echo "Missing repository secret SUPABASE_URL"; exit 1; }
+        test -n "$SUPABASE_ANON_KEY" || { echo "Missing repository secret SUPABASE_ANON_KEY"; exit 1; }
+        case "$SUPABASE_URL" in https://*.supabase.co) echo "Supabase URL format looks valid." ;; *) echo "SUPABASE_URL must be the HTTPS project URL ending in .supabase.co"; exit 1 ;; esac
+
     - name: Cache Gradle packages
       uses: actions/cache@v3
       with:
