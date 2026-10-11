@@ -400,6 +400,32 @@ class MainActivity : AppCompatActivity() {
                 }
             }catch(e:Exception){runOnUiThread{investmentStatus.text="Could not load investment requests: "+(e.message ?: "Cloud error")}}
         }
+        val withdrawalHeading=txt("Pending withdrawal requests",18,ink,true,24)
+        page.addView(withdrawalHeading)
+        val withdrawalStatus=txt("Loading withdrawal requests…",13,muted,false,8);page.addView(withdrawalStatus)
+        thread{
+            try{
+                val requests=cloud.fetchPendingWithdrawals(token)
+                runOnUiThread{
+                    withdrawalStatus.text=if(requests.length()==0)"No pending withdrawal requests." else "Requests ("+requests.length()+")"
+                    for(i in 0 until requests.length()){
+                        val item=requests.optJSONObject(i)?:continue
+                        val txId=item.optString("id")
+                        page.addView(card().apply{
+                            addView(txt("Withdrawal request",15,ink,true))
+                            addView(txt("Investor ID: "+item.optString("user_id"),11,muted,false,4))
+                            addView(txt("Amount: "+money(item.optDouble("amount").toFloat()),16,green,true,8))
+                            addView(btn("Approve request (payout still manual)",true){
+                                reviewWithdrawal(txId,"approved","Approved; payout must be completed manually",query)
+                            },mp(8))
+                            addView(btn("Reject request",false){
+                                reviewWithdrawal(txId,"rejected","Rejected by administrator",query)
+                            },mp(6))
+                        },mp(10))
+                    }
+                }
+            }catch(e:Exception){runOnUiThread{withdrawalStatus.text="Could not load withdrawals: "+(e.message ?: "Cloud error")}}
+        }
         val kycHeading=txt("Pending identity verification",18,ink,true,24)
         page.addView(kycHeading)
         val kycStatus=txt("Loading identity submissions…",13,muted,false,8);page.addView(kycStatus)
@@ -427,6 +453,18 @@ class MainActivity : AppCompatActivity() {
             }catch(e:Exception){runOnUiThread{kycStatus.text="Could not load identity submissions: "+(e.message ?: "Cloud error")}}
         }
         page.addView(btn("Back to profile",false){profile()},mp(18))
+    }
+    private fun reviewWithdrawal(id:String,decision:String,reason:String,query:String){
+        val token=cloudAccessToken ?: p.getString("cloud_access_token",null) ?: run{toast("Please sign in again.");return}
+        thread{
+            try{
+                cloud.adminReviewWithdrawal(token,id,decision,reason)
+                runOnUiThread{
+                    toast(if(decision=="approved")"Withdrawal approved. Payment must still be sent manually." else "Withdrawal rejected.")
+                    adminDashboard(query)
+                }
+            }catch(e:Exception){runOnUiThread{toast("Withdrawal review failed: "+(e.message ?: "Cloud error"))}}
+        }
     }
     private fun openKycDocument(path:String){
         val token=cloudAccessToken ?: p.getString("cloud_access_token",null) ?: run{toast("Please sign in again.");return}
