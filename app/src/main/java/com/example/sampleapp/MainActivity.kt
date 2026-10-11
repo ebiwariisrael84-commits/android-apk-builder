@@ -5,6 +5,8 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.os.Bundle
+import android.content.Intent
+import android.net.Uri
 import android.text.InputType
 import android.view.View
 import android.widget.*
@@ -23,6 +25,8 @@ class MainActivity : AppCompatActivity() {
     @Volatile private var cloudRefreshToken: String? = null
     @Volatile private var cloudUserId: String? = null
     @Volatile private var cloudRole: String = "investor"
+    private var selectedIdImageUri: Uri? = null
+    private var selectedFaceImageUri: Uri? = null
     private val ink=Color.rgb(26,39,55); private val muted=Color.rgb(111,124,139)
     private val green=Color.rgb(15,130,88); private val pale=Color.rgb(235,246,240); private val bg=Color.rgb(247,249,248)
     private var marketValues=floatArrayOf(); private var marketStatus="Loading market data…"; private var marketChange=""
@@ -234,11 +238,98 @@ class MainActivity : AppCompatActivity() {
         }
     }
     private fun profile(){
-        val(scroll,page)=root("Your account","Personal details and settings")
-        page.addView(card().apply{addView(txt(p.getString("account_name","Investor")?:"Investor",19,ink,true));addView(txt(p.getString("account_email","")?:"",14,muted,false,5));addView(txt("Account data is stored locally on this device.",12,muted,false,14));if(cloudRole=="admin") addView(btn("Administrator tools",true){adminDashboard()},mp(12))
-            addView(btn("Refresh cloud account",false){loadCloudWalletThenDashboard()},mp(12))
-            addView(btn("Sign out",false){val token=cloudAccessToken;p.edit().remove("cloud_access_token").remove("cloud_refresh_token").remove("cloud_user_id").putBoolean("logged",false).apply();cloudAccessToken=null;cloudRefreshToken=null;cloudUserId=null;thread{try{if(token!=null)cloud.signOut(token)}catch(_:Exception){}};auth(false)},mp(18))},mp(20))
-        page.addView(btn("Back to dashboard",true){dashboard()},mp(14));setContentView(scroll)
+        val(scroll,page)=root("Your account","Personal details and identity verification")
+        val token=cloudAccessToken ?: p.getString("cloud_access_token",null)
+        val uid=cloudUserId ?: p.getString("cloud_user_id",null)
+        val fullName=input("Full legal name")
+        val country=input("Country")
+        val dob=input("Date of birth (YYYY-MM-DD)")
+        val address=input("Residential address")
+        val phone=input("Phone number")
+        val profileStatus=txt("Loading your cloud profile…",12,muted,false,8)
+        page.addView(card().apply{
+            addView(txt(p.getString("account_name","Investor")?:"Investor",19,ink,true))
+            addView(txt(p.getString("account_email","")?:"",14,muted,false,5))
+            addView(profileStatus)
+            addView(txt("Personal details",16,ink,true,14))
+            addView(fullName,mp(8));addView(country,mp(8));addView(dob,mp(8));addView(address,mp(8));addView(phone,mp(8))
+            addView(btn("Save personal details",true){
+                if(token==null){toast("Please sign in again.");return@btn}
+                val n=fullName.text.toString().trim()
+                val c=country.text.toString().trim()
+                val d=dob.text.toString().trim()
+                val a=address.text.toString().trim()
+                val ph=phone.text.toString().trim()
+                if(n.length<2||c.isBlank()||!d.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))||a.isBlank()||ph.isBlank()){
+                    toast("Complete all details and use YYYY-MM-DD for date of birth.")
+                } else thread{
+                    try{cloud.updateProfile(token,n,c,d,a,ph);runOnUiThread{toast("Personal details saved to the cloud.");profileStatus.text="Profile details saved."}}
+                    catch(e:Exception){runOnUiThread{toast("Profile update failed: "+(e.message ?: "Cloud error"))}}
+                }
+            },mp(14))
+        },mp(16))
+        page.addView(txt("Identity verification",18,ink,true,18))
+        page.addView(card().apply{
+            addView(txt("Choose one image showing one side of your government-issued ID, and one clear face/passport photo. Images are uploaded to private cloud storage.",12,muted,false))
+            addView(btn("Choose ID image",false){pickKycImage(1001)},mp(12))
+            addView(txt(if(selectedIdImageUri==null)"No ID image selected" else "ID image selected",12,green,true,6))
+            addView(btn("Choose face/passport photo",false){pickKycImage(1002)},mp(12))
+            addView(txt(if(selectedFaceImageUri==null)"No face photo selected" else "Face photo selected",12,green,true,6))
+            val docType=Spinner(this).apply{adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,arrayOf("National ID","Passport","Driver's licence","Voter's card"))}
+            addView(txt("ID document type",13,muted,true,12));addView(docType,mp(4))
+            addView(btn("Submit identity verification",true){
+                val idUri=selectedIdImageUri;val faceUri=selectedFaceImageUri
+                if(token==null||uid==null)toast("Please sign in again.")
+                else if(idUri==null||faceUri==null)toast("Choose both the ID image and face photo.")
+                else thread{
+                    try{
+                        val idBytes=contentResolver.openInputStream(idUri)?.use{it.readBytes()}?:throw Exception("Could not read ID image.")
+                        val faceBytes=contentResolver.openInputStream(faceUri)?.use{it.readBytes()}?:throw Exception("Could not read face image.")
+                        val idPath=cloud.uploadKycImage(token,uid,"id",idBytes,contentResolver.getType(idUri)?: "image/jpeg")
+                        val facePath=cloud.uploadKycImage(token,uid,"face",faceBytes,contentResolver.getType(faceUri)?: "image/jpeg")
+                        cloud.submitKyc(token,uid,docType.selectedItem.toString(),idPath,facePath)
+                        runOnUiThread{toast("Identity documents submitted for administrator review.");selectedIdImageUri=null;selectedFaceImageUri=null;profile()}
+                    }catch(e:Exception){runOnUiThread{toast("Identity submission failed: "+(e.message ?: "Cloud error"))}}
+                }
+            },mp(14))
+        },mp(10))
+        if(cloudRole=="admin") page.addView(btn("Administrator tools",true){adminDashboard()},mp(12))
+        page.addView(btn("Refresh cloud account",false){loadCloudWalletThenDashboard()},mp(12))
+        page.addView(btn("Sign out",false){
+            val current=cloudAccessToken
+            p.edit().remove("cloud_access_token").remove("cloud_refresh_token").remove("cloud_user_id").putBoolean("logged",false).apply()
+            cloudAccessToken=null;cloudRefreshToken=null;cloudUserId=null
+            thread{try{if(current!=null)cloud.signOut(current)}catch(_:Exception){}}
+            auth(false)
+        },mp(18))
+        page.addView(btn("Back to dashboard",false){dashboard()},mp(10))
+        setContentView(scroll)
+        if(token!=null&&uid!=null) thread{
+            try{
+                val data=cloud.fetchProfileDetails(token,uid)
+                runOnUiThread{
+                    fullName.setText(data.optString("full_name"))
+                    country.setText(data.optString("country"))
+                    dob.setText(data.optString("date_of_birth"))
+                    address.setText(data.optString("address"))
+                    phone.setText(data.optString("phone"))
+                    profileStatus.text="Account status: "+data.optString("account_status")
+                }
+            }catch(e:Exception){runOnUiThread{profileStatus.text="Could not load profile: "+(e.message ?: "Cloud error")}}
+        }
+    }
+    private fun pickKycImage(requestCode:Int){
+        val intent=Intent(Intent.ACTION_GET_CONTENT).apply{type="image/*";addCategory(Intent.CATEGORY_OPENABLE)}
+        startActivityForResult(Intent.createChooser(intent,"Choose image"),requestCode)
+    }
+    @Deprecated("Use the image picker result API")
+    override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){
+        super.onActivityResult(requestCode,resultCode,data)
+        if(resultCode==RESULT_OK&&data?.data!=null){
+            if(requestCode==1001) selectedIdImageUri=data.data
+            if(requestCode==1002) selectedFaceImageUri=data.data
+            profile()
+        }
     }
     private fun adminDashboard(query:String=""){
         if(cloudRole!="admin"){toast("Administrator access required.");return}
