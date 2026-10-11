@@ -31,6 +31,7 @@ class MainActivity : AppCompatActivity() {
     private var selectedFaceImageUri: Uri? = null
     private var selectedAvatarImageUri: Uri? = null
     @Volatile private var kycApproved: Boolean = false
+    @Volatile private var latestKycStatus: String = "not_submitted"
     private val ink=Color.rgb(26,39,55); private val muted=Color.rgb(111,124,139)
     private val green=Color.rgb(15,130,88); private val pale=Color.rgb(235,246,240); private val bg=Color.rgb(247,249,248)
     private var marketValues=floatArrayOf(); private var marketStatus="Loading market data…"; private var marketChange=""
@@ -294,11 +295,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun routeToKycOrDashboard(session: SupabaseClient.Session, displayName: String) {
         saveSession(session)
+        latestKycStatus = "not_submitted"
         val token = session.accessToken
         thread {
             try {
                 val latestStatus = if (cloudRole == "admin") "approved" else cloud.fetchLatestKycStatus(token, session.userId)
                 runOnUiThread {
+                    latestKycStatus = latestStatus
                     kycApproved = cloudRole == "admin" || latestStatus == "approved"
                     if (kycApproved) loadCloudWalletThenDashboard()
                     else kycOnboardingScreen(latestStatus, displayName)
@@ -306,6 +309,7 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 runOnUiThread {
                     kycApproved = false
+                    latestKycStatus = "not_submitted"
                     toast("Could not check identity verification status: " + (e.message ?: "Cloud error"))
                     kycOnboardingScreen("not_submitted", displayName)
                 }
@@ -374,6 +378,7 @@ class MainActivity : AppCompatActivity() {
                             runOnUiThread {
                                 selectedIdImageUri = null; selectedFaceImageUri = null
                                 kycApproved = false
+                                latestKycStatus = "pending"
                                 toast("KYC submitted. Dashboard access will open after administrator approval.")
                                 kycOnboardingScreen("pending", displayName)
                             }
@@ -392,6 +397,7 @@ class MainActivity : AppCompatActivity() {
                 try {
                     val current = cloud.fetchLatestKycStatus(token, uid)
                     runOnUiThread {
+                        latestKycStatus = current
                         if (current == "approved") { kycApproved = true; loadCloudWalletThenDashboard() }
                         else kycOnboardingScreen(current, displayName)
                     }
@@ -401,6 +407,7 @@ class MainActivity : AppCompatActivity() {
         page.addView(btn("Sign out", false) {
             p.edit().remove("cloud_access_token").remove("cloud_refresh_token").remove("cloud_user_id").putBoolean("logged", false).apply()
             cloudAccessToken = null; cloudRefreshToken = null; cloudUserId = null; kycApproved = false
+            latestKycStatus = "not_submitted"; cloudRole = "investor"
             auth(false)
         }, mp(10))
         showPage(screen, true)
@@ -408,7 +415,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun dashboard(){
         if (!kycApproved && cloudRole != "admin") {
-            kycOnboardingScreen("not_submitted", p.getString("account_name", "Investor") ?: "Investor")
+            kycOnboardingScreen(latestKycStatus, p.getString("account_name", "Investor") ?: "Investor")
             return
         }
         val first=p.getString("account_name","Investor")?.substringBefore(" ")?: "Investor"
@@ -694,6 +701,7 @@ class MainActivity : AppCompatActivity() {
             val current=cloudAccessToken
             p.edit().remove("cloud_access_token").remove("cloud_refresh_token").remove("cloud_user_id").putBoolean("logged",false).apply()
             cloudAccessToken=null;cloudRefreshToken=null;cloudUserId=null;kycApproved=false
+            latestKycStatus="not_submitted";cloudRole="investor"
             thread{try{if(current!=null)cloud.signOut(current)}catch(_:Exception){}}
             auth(false)
         },mp(18))
