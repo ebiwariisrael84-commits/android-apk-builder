@@ -38,7 +38,8 @@ class MainActivity : AppCompatActivity() {
     private val navigationStack = java.util.ArrayDeque<View>()
     private var activePage: View? = null
     private var lastScrollView: ScrollView? = null
-    private var loadingDialog: ProgressDialog? = null
+    private var loadingDialog: android.app.Dialog? = null
+    private var loadingDialogMessage: TextView? = null
     private var loadingGeneration: Int = 0
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
@@ -98,8 +99,44 @@ class MainActivity : AppCompatActivity() {
         runOnUiThread {
             if (isFinishing) return@runOnUiThread
             loadingGeneration++
-            if (loadingDialog?.isShowing == true) loadingDialog?.setMessage(message)
-            else loadingDialog = ProgressDialog.show(this, "Evercrest Capital", message, true, false)
+            if (loadingDialog?.isShowing == true) {
+                loadingDialogMessage?.text = message
+                return@runOnUiThread
+            }
+
+            val panel = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setPadding(dp(22), dp(20), dp(24), dp(20))
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(Color.rgb(12, 27, 45))
+                    cornerRadius = dp(22).toFloat()
+                    setStroke(dp(1), Color.rgb(38, 91, 91))
+                }
+                elevation = dp(12).toFloat()
+            }
+            val spinner = ProgressBar(this).apply {
+                isIndeterminate = true
+                indeterminateTintList = android.content.res.ColorStateList.valueOf(Color.rgb(39, 211, 145))
+            }
+            panel.addView(spinner, LinearLayout.LayoutParams(dp(36), dp(36)))
+            val messageView = txt(message, 14, Color.WHITE, true).apply {
+                maxLines = 3
+                setLineSpacing(dp(2).toFloat(), 1f)
+            }
+            loadingDialogMessage = messageView
+            panel.addView(messageView, LinearLayout.LayoutParams(0, -2, 1f).apply {
+                leftMargin = dp(16)
+            })
+
+            loadingDialog = android.app.Dialog(this).apply {
+                setContentView(panel)
+                setCancelable(false)
+                window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
+                window?.setLayout((resources.displayMetrics.widthPixels - dp(48)), -2)
+                show()
+                window?.setLayout((resources.displayMetrics.widthPixels - dp(48)), -2)
+            }
         }
     }
 
@@ -109,6 +146,7 @@ class MainActivity : AppCompatActivity() {
             if (generationAtRequest == loadingGeneration) {
                 loadingDialog?.dismiss()
                 loadingDialog = null
+                loadingDialogMessage = null
             }
         }
     }
@@ -160,8 +198,8 @@ class MainActivity : AppCompatActivity() {
         header.addView(LinearLayout(this).apply {
             orientation=LinearLayout.VERTICAL
             setPadding(dp(11),0,0,0)
-            addView(txt("EVERCREST",15,Color.WHITE,true))
-            addView(txt("CAPITAL  •  INVESTMENT",9,Color.rgb(196,211,222),true,2))
+            addView(txt("EVERCREST CAPITAL",15,Color.WHITE,true))
+            addView(txt("INVESTMENT",9,Color.rgb(196,211,222),true,2))
         }, LinearLayout.LayoutParams(0,-2,1f))
         val headerSpacer=View(this)
         header.addView(headerSpacer,LinearLayout.LayoutParams(0,1,0f))
