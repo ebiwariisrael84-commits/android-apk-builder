@@ -34,6 +34,7 @@ class MainActivity : AppCompatActivity() {
     private val navigationStack = java.util.ArrayDeque<View>()
     private var activePage: View? = null
     private var loadingDialog: ProgressDialog? = null
+    private var loadingGeneration: Int = 0
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor=bg; window.navigationBarColor=Color.WHITE
@@ -102,13 +103,20 @@ class MainActivity : AppCompatActivity() {
     private fun showLoading(message: String) {
         runOnUiThread {
             if (isFinishing) return@runOnUiThread
+            loadingGeneration++
             if (loadingDialog?.isShowing == true) loadingDialog?.setMessage(message)
             else loadingDialog = ProgressDialog.show(this, "MY INVEST", message, true, false)
         }
     }
 
     private fun hideLoading() {
-        runOnUiThread { loadingDialog?.dismiss(); loadingDialog = null }
+        val generationAtRequest = loadingGeneration
+        runOnUiThread {
+            if (generationAtRequest == loadingGeneration) {
+                loadingDialog?.dismiss()
+                loadingDialog = null
+            }
+        }
     }
 
     private fun handleOAuthCallback(uri: Uri) {
