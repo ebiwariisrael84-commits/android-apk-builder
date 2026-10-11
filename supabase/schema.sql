@@ -20,6 +20,9 @@ create table if not exists public.profiles (
   updated_at timestamptz not null default now()
 );
 
+create unique index if not exists profiles_username_lower_unique
+on public.profiles (lower(username)) where username is not null and username <> '';
+
 create table if not exists public.investment_plans (
   id uuid primary key default gen_random_uuid(),
   slug text not null unique,
@@ -117,7 +120,7 @@ language plpgsql security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id,email,full_name)
+  insert into public.profiles (id,email,full_name,username)
   values (new.id, coalesce(new.email,''), coalesce(new.raw_user_meta_data->>'full_name',''),
           coalesce(new.raw_user_meta_data->>'username',''))
   on conflict (id) do nothing;
