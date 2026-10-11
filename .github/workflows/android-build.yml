@@ -144,8 +144,26 @@ jobs:
           replace('intelligence.setGravity(Gravity.CENTER); result.addView(intelligence);',
                   'intelligence.setGravity(Gravity.CENTER); intelligence.setMaxLines(2); result.addView(intelligence,new LinearLayout.LayoutParams(-1,dp(38)));',
                   'fixed learner panel')
+          # Require a complete small-multiplier history strip, not a single large live-flight value.
+          import re
+          s = re.sub(r'values\\.size\\(\\)\\s*>=\\s*3', 'values.size()>=5', s)
+          s = s.replace('if(ms.length>=3&&ms.length<=35)', 'if(ms.length>=5&&ms.length<=35)')
+          s = s.replace('need 3+ aligned multiplier values', 'need 5+ aligned history multipliers')
+          replace('if(current.size()<3)', 'if(current.size()<5)', 'require five valid history multipliers')
+          # Seed the model from the five newest entries in the visible history row on first detection.
+          replace('if(lastHistoryRow.isEmpty()){lastHistoryRow=new ArrayList<Double>(current);historyDiagnostic="history row detected • baseline "+current.size()+" values; waiting for next round";return;}',
+                  'if(lastHistoryRow.isEmpty()){lastHistoryRow=new ArrayList<Double>(current);int seedCount=Math.min(5,current.size());synchronized(lock){for(int i=seedCount-1;i>=0;i--){double x=current.get(i);rounds.add(x);model.observe(x,rounds.size());newDataCount++;enqueueCloudObservation(x,raw,sourceKind,ocrConfidence);}}lastCompletedRound=current.get(0);lastFreshRoundMs=System.currentTimeMillis();historyDiagnostic="history row seeded • "+seedCount+" completed history runs loaded • collecting new runs";saveRounds();return;}',
+                  'seed five visible history runs immediately')
+          replace('else if(a.size()<8)', 'else if(a.size()<5)', 'estimate after five completed rounds')
+          # Bump the Android version so this build installs as an update over v25.
           p.write_text(s)
+          manifest = Path("/tmp/aviator-v25/AndroidManifest.xml")
+          m = manifest.read_text()
+          m = m.replace('android:versionCode="25" android:versionName="25.0-Hybrid-Capture-Sports-UI"',
+                        'android:versionCode="26" android:versionName="26.0-History-First-Session-Learning"')
+          manifest.write_text(m)
           print("Updated source bytes:", len(s))
+          print("Set Android version to v26")
           PY
 
       - name: Inspect Aviator UI and OCR source for requested updates
