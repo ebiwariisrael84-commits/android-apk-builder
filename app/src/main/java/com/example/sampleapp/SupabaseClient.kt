@@ -63,6 +63,42 @@ class SupabaseClient(private val projectUrl: String, private val publishableKey:
         return if (rows.length() > 0) rows.getJSONObject(0) else JSONObject()
     }
 
+    fun fetchPlans(accessToken: String): JSONArray =
+        JSONArray(request("GET", "/rest/v1/investment_plans?select=id,slug,name,icon,minimum_amount,fixed_profit_rate,is_active&is_active=eq.true&order=minimum_amount.asc", null, accessToken).body)
+
+    fun requestInvestment(accessToken: String, planSlug: String, amount: Double) {
+        request("POST", "/rest/v1/rpc/request_investment",
+            JSONObject().put("p_plan_slug", planSlug).put("p_amount", amount).toString(), accessToken)
+    }
+
+    fun requestWithdrawal(accessToken: String, amount: Double) {
+        request("POST", "/rest/v1/rpc/request_withdrawal",
+            JSONObject().put("p_amount", amount).toString(), accessToken)
+    }
+
+    fun fetchTransactions(accessToken: String, userId: String): JSONArray =
+        JSONArray(request("GET",
+            "/rest/v1/transactions?select=id,transaction_type,amount,status,description,created_at&user_id=eq.$userId&order=created_at.desc&limit=100",
+            null, accessToken).body)
+
+    fun searchUsers(accessToken: String, email: String): JSONArray {
+        val filter = if (email.isBlank()) "" else "&email=ilike.*" + java.net.URLEncoder.encode(email.trim(), "UTF-8") + "*"
+        return JSONArray(request("GET",
+            "/rest/v1/profiles?select=id,email,full_name,role,account_status,created_at&order=created_at.desc&limit=100" + filter,
+            null, accessToken).body)
+    }
+
+    fun adminAdjustWallet(accessToken: String, userId: String, field: String, amount: Double, reason: String) {
+        request("POST", "/rest/v1/rpc/admin_adjust_wallet",
+            JSONObject().put("p_user_id", userId).put("p_field", field)
+                .put("p_new_amount", amount).put("p_reason", reason).toString(), accessToken)
+    }
+
+    fun adminSetProfileStatus(accessToken: String, userId: String, status: String, reason: String) {
+        request("POST", "/rest/v1/rpc/admin_set_profile_status",
+            JSONObject().put("p_user_id", userId).put("p_status", status).put("p_reason", reason).toString(), accessToken)
+    }
+
     private fun request(method: String, path: String, body: String? = null, accessToken: String? = null): Response {
         if (!isConfigured()) throw ApiException(0, "Cloud connection is not configured. Check GitHub Actions secrets.")
         var lastError: Exception? = null
