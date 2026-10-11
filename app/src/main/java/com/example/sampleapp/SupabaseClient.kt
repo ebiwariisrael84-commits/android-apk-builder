@@ -145,7 +145,7 @@ class SupabaseClient(private val projectUrl: String, private val publishableKey:
         val userId = request("GET", "/auth/v1/user", null, accessToken).json().optString("id")
         request("PATCH", "/rest/v1/kyc_submissions?id=eq.$submissionId",
             JSONObject().put("status", status).put("review_reason", reason)
-                .put("reviewed_by", userId).put("reviewed_at", java.time.Instant.now().toString()).toString(),
+                .put("reviewed_by", userId).put("reviewed_at", java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).format(java.util.Date())).toString(),
             accessToken)
     }
 
