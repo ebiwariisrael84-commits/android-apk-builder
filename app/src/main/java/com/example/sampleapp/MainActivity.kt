@@ -18,10 +18,55 @@ import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
     private val p by lazy { getSharedPreferences("myinvest_local", MODE_PRIVATE) }
+    private val cloud by lazy { SupabaseClient(BuildConfig.SUPABASE_URL, BuildConfig.SUPABASE_ANON_KEY) }
+    @Volatile private var cloudAccessToken: String? = null
+    @Volatile private var cloudRefreshToken: String? = null
+    @Volatile private var cloudUserId: String? = null
+    @Volatile private var cloudRole: String = "investor"
     private val ink=Color.rgb(26,39,55); private val muted=Color.rgb(111,124,139)
     private val green=Color.rgb(15,130,88); private val pale=Color.rgb(235,246,240); private val bg=Color.rgb(247,249,248)
     private var marketValues=floatArrayOf(); private var marketStatus="Loading market data…"; private var marketChange=""
-    override fun onCreate(savedInstanceState:Bundle?) { super.onCreate(savedInstanceState); window.statusBarColor=bg; window.navigationBarColor=Color.WHITE; window.decorView.systemUiVisibility=View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR; if(p.getBoolean("logged",false)) dashboard() else auth(false) }
+    override fun onCreate(savedInstanceState:Bundle?) {
+        super.onCreate(savedInstanceState)
+        window.statusBarColor=bg; window.navigationBarColor=Color.WHITE
+        window.decorView.systemUiVisibility=View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        auth(false)
+        val savedRefresh=p.getString("cloud_refresh_token",null)
+        if(savedRefresh!=null && cloud.isConfigured()) thread {
+            try {
+                val session=cloud.refresh(savedRefresh)
+                val profile=cloud.fetchProfile(session.accessToken,session.userId)
+                runOnUiThread {
+                    saveSession(session)
+                    if(profile.optString("account_status")=="approved") {
+                        p.edit().putString("account_name",profile.optString("full_name","Investor")).putString("account_email",session.email).putBoolean("logged",true).apply()
+                        cloudRole=profile.optString("role","investor"); loadCloudWalletThenDashboard()
+                    } else { p.edit().remove("cloud_access_token").remove("cloud_refresh_token").putBoolean("logged",false).apply(); auth(false); toast("Your account is "+profile.optString("account_status","pending")+". Dashboard access requires administrator approval.") }
+                }
+            } catch (_:Exception) { runOnUiThread { p.edit().remove("cloud_access_token").remove("cloud_refresh_token").putBoolean("logged",false).apply(); auth(false) } }
+        }
+    }
+    private fun saveSession(session:SupabaseClient.Session) {
+        cloudAccessToken=session.accessToken; cloudRefreshToken=session.refreshToken; cloudUserId=session.userId
+        p.edit().putString("cloud_access_token",session.accessToken).putString("cloud_refresh_token",session.refreshToken).putString("cloud_user_id",session.userId).apply()
+    }
+    private fun loadCloudWalletThenDashboard() {
+        val token=cloudAccessToken ?: p.getString("cloud_access_token",null)
+        val uid=cloudUserId ?: p.getString("cloud_user_id",null)
+        if(token==null || uid==null) { auth(false); return }
+        thread {
+            try {
+                val wallet=cloud.fetchWallet(token,uid)
+                runOnUiThread {
+                    p.edit().putFloat("deposited",wallet.optDouble("deposited_amount",0.0).toFloat())
+                        .putFloat("capital",wallet.optDouble("capital_amount",0.0).toFloat())
+                        .putFloat("profits",wallet.optDouble("profit_amount",0.0).toFloat())
+                        .putFloat("withdrawals",wallet.optDouble("withdrawals_amount",0.0).toFloat()).apply()
+                    dashboard()
+                }
+            } catch(e:Exception) { runOnUiThread { toast("Cloud account data could not be loaded: "+(e.message ?: "network error")); auth(false) } }
+        }
+    }
 
     private fun root(title:String,sub:String?=null):Pair<ScrollView,LinearLayout>{
         val page=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(20),dp(20),dp(28));setBackgroundColor(bg)}
@@ -30,7 +75,7 @@ class MainActivity : AppCompatActivity() {
         return scroll to page
     }
     private fun auth(register:Boolean){
-        val(scroll,page)=root(if(register)"Create account" else "Welcome back",if(register)"Create your personal account" else "Sign in to your account")
+        val(scroll,page)=root(if(register)"Create account" else "Welcome back",if(register)"Create your MY INVEST account" else "Sign in securely to your cloud account")
         val name=input("Full name").apply{visibility=if(register)View.VISIBLE else View.GONE}
         val email=input("Email address",InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS)
         val pass=input("Password",InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
@@ -38,19 +83,58 @@ class MainActivity : AppCompatActivity() {
             addView(name);addView(email,mp(12));addView(pass,mp(12))
             addView(btn(if(register)"Create account" else "Sign in",true){
                 val n=name.text.toString().trim();val e=email.text.toString().trim().lowercase(Locale.ROOT);val pw=pass.text.toString()
-                when{
+                when {
+                    !cloud.isConfigured()->toast("Cloud connection is not configured. Please rebuild after adding the Supabase GitHub secrets.")
                     register&&n.length<2->toast("Enter your full name.")
                     !e.contains("@")||!e.contains(".")->toast("Enter a valid email.")
-                    pw.length<6->toast("Password must contain at least 6 characters.")
-                    register&&p.getString("account_email",null)!=null->toast("A local account already exists. Sign in or clear app data to create another.")
-                    register->{p.edit().putString("account_name",n).putString("account_email",e).putString("password_hash",hash(pw)).putBoolean("logged",true).putFloat("deposited",0f).putFloat("capital",0f).putFloat("profits",0f).putFloat("withdrawals",0f).putString("transactions","[]").apply();dashboard()}
-                    p.getString("account_email","")!=e||p.getString("password_hash","")!=hash(pw)->toast("Email or password is incorrect.")
-                    else->{p.edit().putBoolean("logged",true).apply();dashboard()}
+                    pw.length<8->toast("Password must contain at least 8 characters.")
+                    else->{
+                        val action=btn(if(register)"Create account" else "Sign in",true){}
+                        thread {
+                            try {
+                                if(register) {
+                                    val response=cloud.signUp(e,pw,n)
+                                    val obj=try{response.json()}catch(_:Exception){JSONObject()}
+                                    val access=obj.optString("access_token")
+                                    val user=obj.optJSONObject("user") ?: obj.optJSONObject("data")?.optJSONObject("user")
+                                    if(access.isBlank() || user==null) {
+                                        runOnUiThread { toast("Registration submitted. Check your email to confirm the account, then sign in. Your profile must be approved by the administrator.") }
+                                    } else {
+                                        val session=SupabaseClient.Session(access,obj.optString("refresh_token"),user.optString("id"),user.optString("email",e))
+                                        val profile=cloud.fetchProfile(session.accessToken,session.userId)
+                                        runOnUiThread {
+                                            saveSession(session)
+                                            if(profile.optString("account_status")=="approved") {
+                                                cloudRole=profile.optString("role","investor")
+                                                p.edit().putString("account_name",profile.optString("full_name",n)).putString("account_email",e).putBoolean("logged",true).apply()
+                                                loadCloudWalletThenDashboard()
+                                            } else { toast("Account created. Administrator approval is required before dashboard access."); auth(false) }
+                                        }
+                                    }
+                                } else {
+                                    val session=cloud.signIn(e,pw)
+                                    val profile=cloud.fetchProfile(session.accessToken,session.userId)
+                                    runOnUiThread {
+                                        if(profile.optString("account_status")!="approved") {
+                                            toast("Your account is "+profile.optString("account_status","pending")+". Please wait for administrator approval.")
+                                        } else {
+                                            saveSession(session);cloudRole=profile.optString("role","investor")
+                                            p.edit().putString("account_name",profile.optString("full_name","Investor")).putString("account_email",session.email).putBoolean("logged",true).apply()
+                                            loadCloudWalletThenDashboard()
+                                        }
+                                    }
+                                }
+                            } catch(e:Exception) {
+                                runOnUiThread { toast("Cloud connection failed: "+(e.message ?: "Please try again.")) }
+                            }
+                        }
+                    }
                 }
             },mp(18))
             addView(btn(if(register)"Already registered? Sign in" else "Create a new account",false){auth(!register)},mp(8))
         },mp(24))
-        page.addView(txt("Account information is stored locally on this device in this build.",12,muted,false,18));setContentView(scroll)
+        page.addView(txt("Accounts and balances require the configured Supabase cloud service. New accounts need administrator approval.",12,muted,false,18))
+        setContentView(scroll)
     }
     private fun dashboard(){
         val first=p.getString("account_name","Investor")?.substringBefore(" ")?: "Investor"
@@ -113,7 +197,9 @@ class MainActivity : AppCompatActivity() {
     }
     private fun profile(){
         val(scroll,page)=root("Your account","Personal details and settings")
-        page.addView(card().apply{addView(txt(p.getString("account_name","Investor")?:"Investor",19,ink,true));addView(txt(p.getString("account_email","")?:"",14,muted,false,5));addView(txt("Account data is stored locally on this device.",12,muted,false,14));addView(btn("Manage balances",false){manageBalances()},mp(12));addView(btn("Sign out",false){p.edit().putBoolean("logged",false).apply();auth(false)},mp(18))},mp(20))
+        page.addView(card().apply{addView(txt(p.getString("account_name","Investor")?:"Investor",19,ink,true));addView(txt(p.getString("account_email","")?:"",14,muted,false,5));addView(txt("Account data is stored locally on this device.",12,muted,false,14));if(cloudRole=="admin") addView(txt("Administrator privileges are verified by the cloud profile.",12,green,true,8))
+            addView(btn("Refresh cloud account",false){loadCloudWalletThenDashboard()},mp(12))
+            addView(btn("Sign out",false){val token=cloudAccessToken;p.edit().remove("cloud_access_token").remove("cloud_refresh_token").remove("cloud_user_id").putBoolean("logged",false).apply();cloudAccessToken=null;cloudRefreshToken=null;cloudUserId=null;thread{try{if(token!=null)cloud.signOut(token)}catch(_:Exception){}};auth(false)},mp(18))},mp(20))
         page.addView(btn("Back to dashboard",true){dashboard()},mp(14));setContentView(scroll)
     }
     private fun manageBalances(){
