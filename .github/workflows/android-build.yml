@@ -123,6 +123,27 @@ jobs:
           replace('String.format(Locale.US,"Confidence %.0f/100 • model agreement %.0f%%",z.conf,z.agreement)',
                   'String.format(Locale.US,"Model score %.0f/100 • agreement %.0f%% • not a win probability",z.conf,z.agreement)',
                   'honest confidence wording')
+          # Sporty red/black/white palette and stable, compact Live Analysis sizing.
+          for old, new in [
+              ("Color.rgb(185,255,55)", "Color.rgb(255,58,58)"),
+              ("Color.rgb(255,193,7)", "Color.rgb(235,42,42)"),
+              ("Color.rgb(255,224,120)", "Color.rgb(245,245,245)"),
+              ("Color.rgb(17,67,35)", "Color.rgb(52,14,18)"),
+              ("Color.rgb(22,76,36)", "Color.rgb(65,13,18)"),
+              ("Color.rgb(12,23,18)", "Color.rgb(10,10,12)"),
+              ("Color.rgb(12,22,17)", "Color.rgb(10,10,12)"),
+              ("Color.rgb(91,23,20)", "Color.rgb(34,10,12)"),
+          ]:
+              s = s.replace(old, new)
+          replace('prediction.setGravity(Gravity.CENTER); result.addView(prediction);',
+                  'prediction.setGravity(Gravity.CENTER); prediction.setMaxLines(2); prediction.setTextSize(14); result.addView(prediction,new LinearLayout.LayoutParams(-1,dp(58)));',
+                  'fixed prediction panel')
+          replace('confidence.setGravity(Gravity.CENTER); result.addView(confidence);',
+                  'confidence.setGravity(Gravity.CENTER); confidence.setMaxLines(2); result.addView(confidence,new LinearLayout.LayoutParams(-1,dp(38)));',
+                  'fixed confidence panel')
+          replace('intelligence.setGravity(Gravity.CENTER); result.addView(intelligence);',
+                  'intelligence.setGravity(Gravity.CENTER); intelligence.setMaxLines(2); result.addView(intelligence,new LinearLayout.LayoutParams(-1,dp(38)));',
+                  'fixed learner panel')
           p.write_text(s)
           print("Updated source bytes:", len(s))
           PY
