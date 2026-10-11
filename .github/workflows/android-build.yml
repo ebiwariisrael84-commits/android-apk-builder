@@ -146,7 +146,7 @@ jobs:
                   'fixed learner panel')
           # Require a complete small-multiplier history strip, not a single large live-flight value.
           import re
-          s = re.sub(r'values\\.size\\(\\)\\s*>=\\s*3', 'values.size()>=5', s)
+          s = s.replace('values.size()>=3', 'values.size()>=5')
           s = s.replace('if(ms.length>=3&&ms.length<=35)', 'if(ms.length>=5&&ms.length<=35)')
           s = s.replace('need 3+ aligned multiplier values', 'need 5+ aligned history multipliers')
           replace('if(current.size()<3)', 'if(current.size()<5)', 'require five valid history multipliers')
