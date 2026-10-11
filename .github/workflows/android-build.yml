@@ -66,7 +66,7 @@ jobs:
               if not hits: continue
               print(f"\\n===== SOURCE {f} ({len(lines)} lines; {len(hits)} matches) =====")
               shown = set()
-              for i in hits[:70]:
+              for i in hits[:250]:
                   lo, hi = max(0, i-3), min(len(lines), i+4)
                   if any(j in shown for j in range(lo, hi)): continue
                   print(f"--- lines {lo+1}-{hi} ---")
