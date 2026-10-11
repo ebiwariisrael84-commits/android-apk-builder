@@ -93,6 +93,14 @@ class MainActivity : AppCompatActivity() {
         else activePage?.let { previous -> if (previous !== view) navigationStack.addLast(previous) }
         activePage = view
         setContentView(view)
+        // Show the branded loading indicator on every page navigation, including
+        // quick local pages, and let longer page-specific operations keep their own message.
+        showLoading("Loading page…")
+        android.os.Handler(mainLooper).postDelayed({
+            if (loadingDialog?.isShowing == true && loadingDialogMessage?.text == "Loading page…") {
+                hideLoading()
+            }
+        }, 450)
     }
 
     private fun showLoading(message: String) {
