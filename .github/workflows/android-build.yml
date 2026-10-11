@@ -49,6 +49,32 @@ jobs:
           test -f /tmp/aviator-v25/src/com/aviator/live/MainActivity.java
           echo "Verified Aviator Predictor v25 source files."
 
+      - name: Inspect Aviator UI and OCR source for requested updates
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          root = Path("/tmp/aviator-v25")
+          patterns = re.compile(r"iframe|Live Analysis|CONNECT|multiplier|round|OCR|capture|prediction|estimate|range|WebView|button", re.I)
+          for f in root.rglob("*"):
+              if not f.is_file() or "build" in f.parts or f.suffix.lower() not in {".java", ".html", ".js", ".css", ".xml", ".kt"}:
+                  continue
+              try: lines = f.read_text(errors="ignore").splitlines()
+              except Exception: continue
+              hits = [i for i, line in enumerate(lines) if patterns.search(line)]
+              if not hits: continue
+              print(f"\\n===== SOURCE {f} ({len(lines)} lines; {len(hits)} matches) =====")
+              shown = set()
+              for i in hits[:70]:
+                  lo, hi = max(0, i-3), min(len(lines), i+4)
+                  if any(j in shown for j in range(lo, hi)): continue
+                  print(f"--- lines {lo+1}-{hi} ---")
+                  for j in range(lo, hi):
+                      print(f"{j+1}: {lines[j]}")
+                      shown.add(j)
+          PY
+
       - name: Build debug APK
         run: gradle --no-daemon --stacktrace -p /tmp/aviator-v25 assembleDebug
 
