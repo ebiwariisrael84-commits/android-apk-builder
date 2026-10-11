@@ -35,6 +35,15 @@ class MainActivity : AppCompatActivity() {
         window.statusBarColor=bg; window.navigationBarColor=Color.WHITE
         window.decorView.systemUiVisibility=View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
         auth(false)
+        val incoming=intent?.data
+        if(incoming?.scheme=="myinvest" && incoming.host=="reset-password") {
+            val fragment=incoming.fragment.orEmpty().split("&").mapNotNull { part ->
+                val pieces=part.split("=", limit=2)
+                if(pieces.size==2) pieces[0] to Uri.decode(pieces[1]) else null
+            }.toMap()
+            val resetToken=fragment["access_token"]
+            if(fragment["type"]=="recovery" && !resetToken.isNullOrBlank()) { resetPasswordScreen(resetToken); return }
+        }
         val savedRefresh=p.getString("cloud_refresh_token",null)
         if(savedRefresh!=null && cloud.isConfigured()) thread {
             try {
@@ -135,11 +144,44 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             },mp(18))
+            if(!register) addView(btn("Forgot password?",false){
+                val e=email.text.toString().trim().lowercase(Locale.ROOT)
+                if(!e.contains("@") || !e.contains(".")) toast("Enter your account email first.")
+                else thread {
+                    try { cloud.requestPasswordReset(e); runOnUiThread { toast("If this email belongs to an account, a reset email will be sent. Check your inbox and spam folder.") } }
+                    catch(ex:Exception) { runOnUiThread { toast("Could not request password reset: "+(ex.message ?: "Please try again.")) } }
+                }
+            },mp(8))
             addView(btn(if(register)"Already registered? Sign in" else "Create a new account",false){auth(!register)},mp(8))
         },mp(24))
         page.addView(txt("Accounts and balances require the configured Supabase cloud service. New accounts need administrator approval.",12,muted,false,18))
         setContentView(scroll)
     }
+    private fun resetPasswordScreen(accessToken:String) {
+        val(scroll,page)=root("Set a new password","Choose a new password for your MY INVEST account")
+        val password=input("New password",InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
+        val confirm=input("Confirm new password",InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
+        page.addView(card().apply {
+            addView(password); addView(confirm,mp(12))
+            addView(btn("Update password",true){
+                val a=password.text.toString(); val b=confirm.text.toString()
+                if(a.length<8) toast("Password must contain at least 8 characters.")
+                else if(a!=b) toast("The passwords do not match.")
+                else thread {
+                    try {
+                        cloud.updatePassword(accessToken,a)
+                        runOnUiThread {
+                            toast("Password updated. Please sign in with your new password.")
+                            p.edit().remove("cloud_access_token").remove("cloud_refresh_token").remove("cloud_user_id").putBoolean("logged",false).apply()
+                            auth(false)
+                        }
+                    } catch(e:Exception) { runOnUiThread { toast("Password update failed: "+(e.message ?: "Request a new reset email and try again.")) } }
+                }
+            },mp(16))
+        },mp(20))
+        setContentView(scroll)
+    }
+
     private fun dashboard(){
         val first=p.getString("account_name","Investor")?.substringBefore(" ")?: "Investor"
         val(scroll,page)=root("Your dashboard","Welcome, "+first)
