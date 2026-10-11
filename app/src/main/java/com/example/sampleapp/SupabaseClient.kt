@@ -17,11 +17,11 @@ class SupabaseClient(private val projectUrl: String, private val publishableKey:
 
     fun isConfigured() = baseUrl.startsWith("https://") && publishableKey.isNotBlank()
 
-    fun signUp(email: String, password: String, fullName: String) = request(
+    fun signUp(email: String, password: String, username: String) = request(
         "POST", "/auth/v1/signup?redirect_to=" +
             java.net.URLEncoder.encode("myinvest://confirm-email", "UTF-8"),
         JSONObject().put("email", email).put("password", password)
-            .put("data", JSONObject().put("full_name", fullName)).toString()
+            .put("data", JSONObject().put("username", username).put("full_name", username)).toString()
     )
 
     fun signIn(email: String, password: String): Session {
@@ -60,7 +60,7 @@ class SupabaseClient(private val projectUrl: String, private val publishableKey:
 
     fun fetchProfile(accessToken: String, userId: String): JSONObject {
         val response = request("GET",
-            "/rest/v1/profiles?select=id,email,full_name,role,account_status&id=eq.$userId", null, accessToken)
+            "/rest/v1/profiles?select=id,email,username,full_name,avatar_image_path,role,account_status&id=eq.$userId", null, accessToken)
         val rows = JSONArray(response.body)
         if (rows.length() == 0) throw ApiException(404, "Your cloud profile is missing. Check that the database schema was installed.")
         return rows.getJSONObject(0)
@@ -76,7 +76,7 @@ class SupabaseClient(private val projectUrl: String, private val publishableKey:
 
     fun fetchProfileDetails(accessToken: String, userId: String): JSONObject {
         val rows = JSONArray(request("GET",
-            "/rest/v1/profiles?select=id,email,full_name,country,date_of_birth,address,phone,role,account_status&id=eq.$userId",
+            "/rest/v1/profiles?select=id,email,username,full_name,country,date_of_birth,address,phone,avatar_image_path,role,account_status&id=eq.$userId",
             null, accessToken).body)
         if (rows.length() == 0) throw ApiException(404, "Cloud profile not found.")
         return rows.getJSONObject(0)
@@ -87,6 +87,19 @@ class SupabaseClient(private val projectUrl: String, private val publishableKey:
         request("PATCH", "/rest/v1/profiles?id=eq.$userId",
             JSONObject().put("full_name", fullName).put("country", country).put("date_of_birth", dateOfBirth)
                 .put("address", address).put("phone", phone).toString(), accessToken)
+    }
+
+    fun updateAvatarPath(accessToken: String, path: String) {
+        val userId = request("GET", "/auth/v1/user", null, accessToken).json().optString("id")
+        request("PATCH", "/rest/v1/profiles?id=eq.$userId",
+            JSONObject().put("avatar_image_path", path).toString(), accessToken)
+    }
+
+    fun fetchLatestKycStatus(accessToken: String, userId: String): String {
+        val rows = JSONArray(request("GET",
+            "/rest/v1/kyc_submissions?select=status&user_id=eq.$userId&order=created_at.desc&limit=1",
+            null, accessToken).body)
+        return if (rows.length() == 0) "not_submitted" else rows.getJSONObject(0).optString("status", "pending")
     }
 
     fun uploadKycImage(accessToken: String, userId: String, kind: String, bytes: ByteArray, contentType: String): String {
