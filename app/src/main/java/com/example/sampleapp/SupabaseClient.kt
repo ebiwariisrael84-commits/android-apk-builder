@@ -47,6 +47,16 @@ class SupabaseClient(private val projectUrl: String, private val publishableKey:
 
     fun signOut(accessToken: String) { request("POST", "/auth/v1/logout", null, accessToken) }
 
+    fun requestPasswordReset(email: String) {
+        request("POST", "/auth/v1/recover?redirect_to=" +
+            java.net.URLEncoder.encode("myinvest://reset-password", "UTF-8"),
+            JSONObject().put("email", email.trim()).toString())
+    }
+
+    fun updatePassword(accessToken: String, newPassword: String) {
+        request("PUT", "/auth/v1/user", JSONObject().put("password", newPassword).toString(), accessToken)
+    }
+
     fun fetchProfile(accessToken: String, userId: String): JSONObject {
         val response = request("GET",
             "/rest/v1/profiles?select=id,email,full_name,role,account_status&id=eq.$userId", null, accessToken)
@@ -122,6 +132,16 @@ class SupabaseClient(private val projectUrl: String, private val publishableKey:
 
     fun fetchPlans(accessToken: String): JSONArray =
         JSONArray(request("GET", "/rest/v1/investment_plans?select=id,slug,name,icon,minimum_amount,fixed_profit_rate,is_active&is_active=eq.true&order=minimum_amount.asc", null, accessToken).body)
+
+    fun fetchAdminPlans(accessToken: String): JSONArray =
+        JSONArray(request("GET", "/rest/v1/investment_plans?select=id,slug,name,icon,minimum_amount,fixed_profit_rate,is_active&order=minimum_amount.asc", null, accessToken).body)
+
+    fun adminUpdatePlan(accessToken: String, planId: String, name: String, minimum: Double, rate: Double, active: Boolean) {
+        request("POST", "/rest/v1/rpc/admin_update_investment_plan",
+            JSONObject().put("p_plan_id", planId).put("p_name", name.trim())
+                .put("p_minimum_amount", minimum).put("p_fixed_profit_rate", rate)
+                .put("p_is_active", active).toString(), accessToken)
+    }
 
     fun requestInvestment(accessToken: String, planSlug: String, amount: Double) {
         request("POST", "/rest/v1/rpc/request_investment",
