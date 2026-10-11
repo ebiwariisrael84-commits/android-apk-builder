@@ -39,6 +39,20 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         window.statusBarColor=bg; window.navigationBarColor=Color.WHITE
         window.decorView.systemUiVisibility=View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        // Require credentials whenever the app is launched into a fresh Activity.
+        // Do not restore a saved refresh token on startup; that caused a race where
+        // the login screen briefly appeared and then opened the dashboard automatically.
+        if (savedInstanceState == null) {
+            p.edit()
+                .remove("cloud_access_token")
+                .remove("cloud_refresh_token")
+                .remove("cloud_user_id")
+                .putBoolean("logged", false)
+                .apply()
+            cloudAccessToken = null
+            cloudRefreshToken = null
+            cloudUserId = null
+        }
         auth(false)
         val incoming=intent?.data
         if(incoming?.scheme=="myinvest" && incoming.host=="confirm-email") {
@@ -57,24 +71,6 @@ class MainActivity : AppCompatActivity() {
             }.toMap()
             val resetToken=fragment["access_token"]
             if(fragment["type"]=="recovery" && !resetToken.isNullOrBlank()) { resetPasswordScreen(resetToken); return }
-        }
-        val savedRefresh=p.getString("cloud_refresh_token",null)
-        if(savedRefresh!=null && cloud.isConfigured()) {
-            showLoading("Restoring your secure session…")
-            thread {
-            try {
-                val session=cloud.refresh(savedRefresh)
-                val profile=cloud.fetchProfile(session.accessToken,session.userId)
-                runOnUiThread {
-                    saveSession(session)
-                    if(profile.optString("account_status")=="approved") {
-                        hideLoading()
-                        p.edit().putString("account_name",profile.optString("full_name","Investor")).putString("account_email",session.email).putBoolean("logged",true).apply()
-                        cloudRole=profile.optString("role","investor"); loadCloudWalletThenDashboard()
-                    } else { hideLoading(); p.edit().remove("cloud_access_token").remove("cloud_refresh_token").putBoolean("logged",false).apply(); auth(false); toast("Your account is "+profile.optString("account_status","pending")+". Dashboard access requires administrator approval.") }
-                }
-            } catch (_:Exception) { runOnUiThread { hideLoading(); p.edit().putBoolean("logged",false).apply(); auth(false); toast("Could not reconnect to your cloud account. Check internet and sign in again to retry.") } }
-            }
         }
     }
     override fun onBackPressed() {
