@@ -380,3 +380,37 @@ revoke all on function public.admin_review_investment(uuid,text,text) from publi
 grant execute on function public.request_investment(text,numeric) to authenticated;
 grant execute on function public.request_withdrawal(numeric) to authenticated;
 grant execute on function public.admin_review_investment(uuid,text,text) to authenticated;
+
+
+create or replace function public.admin_review_withdrawal(p_transaction_id uuid, p_decision text, p_reason text default null)
+returns void
+language plpgsql security definer
+set search_path = public
+as $$
+declare v_tx public.transactions%rowtype;
+begin
+  if not public.is_admin() then raise exception 'Administrator access required'; end if;
+  if p_decision not in ('approved','rejected') then raise exception 'Decision must be approved or rejected'; end if;
+  select * into v_tx from public.transactions where id=p_transaction_id for update;
+  if not found or v_tx.transaction_type <> 'withdrawal_request' or v_tx.status <> 'pending' then
+    raise exception 'Pending withdrawal request not found';
+  end if;
+  if p_decision='approved' then
+    update public.wallet_accounts set withdrawals_amount=withdrawals_amount+v_tx.amount,updated_at=now()
+      where user_id=v_tx.user_id;
+    update public.transactions set transaction_type='withdrawal',status='posted',
+      description=description||' — approved; payout must be completed manually',created_by=auth.uid()
+      where id=v_tx.id;
+  else
+    update public.transactions set status='rejected',
+      description=description||' — rejected: '||coalesce(p_reason,''),created_by=auth.uid()
+      where id=v_tx.id;
+  end if;
+  insert into public.admin_audit_log(admin_user_id,target_user_id,action,details)
+  values(auth.uid(),v_tx.user_id,'withdrawal_reviewed',
+    jsonb_build_object('transaction_id',v_tx.id,'decision',p_decision,'amount',v_tx.amount,'reason',p_reason));
+end;
+$$;
+
+revoke all on function public.admin_review_withdrawal(uuid,text,text) from public, anon;
+grant execute on function public.admin_review_withdrawal(uuid,text,text) to authenticated;
