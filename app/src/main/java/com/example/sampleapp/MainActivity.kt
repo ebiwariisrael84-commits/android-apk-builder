@@ -281,7 +281,44 @@ class MainActivity : AppCompatActivity() {
                 }
             }catch(e:Exception){runOnUiThread{loading.text="Unable to load users: "+(e.message ?: "Cloud error")}}
         }
+        val investmentHeading=txt("Pending investment requests",18,ink,true,24)
+        page.addView(investmentHeading)
+        val investmentStatus=txt("Loading pending requests…",13,muted,false,8);page.addView(investmentStatus)
+        thread{
+            try{
+                val pending=cloud.fetchPendingInvestments(token)
+                runOnUiThread{
+                    investmentStatus.text=if(pending.length()==0)"No pending investment requests." else "Requests ("+pending.length()+")"
+                    for(i in 0 until pending.length()){
+                        val inv=pending.optJSONObject(i)?:continue
+                        val investmentId=inv.optString("id")
+                        val investorId=inv.optString("user_id")
+                        page.addView(card().apply{
+                            addView(txt("Investment request",15,ink,true))
+                            addView(txt("Investor ID: "+investorId,11,muted,false,4))
+                            addView(txt("Principal: "+money(inv.optDouble("principal_amount").toFloat()),16,green,true,8))
+                            addView(txt("Configured profit estimate: "+money(inv.optDouble("fixed_profit_amount").toFloat())+" (not guaranteed)",12,muted,false,4))
+                            addView(btn("Approve investment",true){
+                                reviewInvestment(investmentId,"active","Approved by administrator",query)
+                            },mp(8))
+                            addView(btn("Reject investment",false){
+                                reviewInvestment(investmentId,"rejected","Rejected by administrator",query)
+                            },mp(6))
+                        },mp(10))
+                    }
+                }
+            }catch(e:Exception){runOnUiThread{investmentStatus.text="Could not load investment requests: "+(e.message ?: "Cloud error")}}
+        }
         page.addView(btn("Back to profile",false){profile()},mp(18))
+    }
+    private fun reviewInvestment(id:String,decision:String,reason:String,query:String){
+        val token=cloudAccessToken ?: p.getString("cloud_access_token",null) ?: run{toast("Please sign in again.");return}
+        thread{
+            try{
+                cloud.adminReviewInvestment(token,id,decision,reason)
+                runOnUiThread{toast("Investment request "+decision+".");adminDashboard(query)}
+            }catch(e:Exception){runOnUiThread{toast("Investment review failed: "+(e.message ?: "Cloud error"))}}
+        }
     }
     private fun changeUserStatus(userId:String,status:String,reason:String,query:String){
         val token=cloudAccessToken ?: p.getString("cloud_access_token",null) ?: run{toast("Please sign in again.");return}
