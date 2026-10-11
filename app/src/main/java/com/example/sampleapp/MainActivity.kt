@@ -97,7 +97,7 @@ class MainActivity : AppCompatActivity() {
             if (isFinishing) return@runOnUiThread
             loadingGeneration++
             if (loadingDialog?.isShowing == true) loadingDialog?.setMessage(message)
-            else loadingDialog = ProgressDialog.show(this, "MY INVEST", message, true, false)
+            else loadingDialog = ProgressDialog.show(this, "Everest Capital", message, true, false)
         }
     }
 
@@ -135,14 +135,65 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun root(title:String,sub:String?=null):Pair<ScrollView,LinearLayout>{
+    private fun root(title:String,sub:String?=null):Pair<LinearLayout,LinearLayout>{
+        val shell=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setBackgroundColor(bg)}
+        val header=LinearLayout(this).apply{
+            orientation=LinearLayout.HORIZONTAL
+            gravity=android.view.Gravity.CENTER_VERTICAL
+            setPadding(dp(16),dp(10),dp(14),dp(10))
+            setBackgroundColor(ink)
+            elevation=dp(5).toFloat()
+        }
+        val logoFrame=android.widget.FrameLayout(this).apply{
+            background=android.graphics.drawable.GradientDrawable().apply{setColor(Color.rgb(11,20,36));cornerRadius=dp(12).toFloat()}
+            layoutParams=LinearLayout.LayoutParams(dp(44),dp(44))
+        }
+        logoFrame.addView(ImageView(this).apply{
+            setImageResource(R.drawable.ic_launcher_foreground)
+            scaleType=ImageView.ScaleType.FIT_CENTER
+            setPadding(dp(3),dp(3),dp(3),dp(3))
+        },android.widget.FrameLayout.LayoutParams(-1,-1))
+        header.addView(logoFrame)
+        val brand=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(10),0,0,0)}
+        brand.addView(txt("EVEREST CAPITAL",15,Color.WHITE,true))
+        brand.addView(txt("INVESTMENT ACCOUNT",9,Color.rgb(204,180,117),true,2))
+        header.addView(brand,LinearLayout.LayoutParams(0,-2,1f))
+        val about=txt(if(title=="About Everest Capital")"HOME" else "ABOUT",11,Color.rgb(231,196,119),true)
+        about.gravity=android.view.Gravity.CENTER
+        about.setPadding(dp(10),dp(12),dp(4),dp(12))
+        about.setOnClickListener{
+            if(title=="About Everest Capital"){
+                if(p.getBoolean("logged",false)) dashboard() else auth(false)
+            }else aboutPage()
+        }
+        header.addView(about)
+        shell.addView(header,LinearLayout.LayoutParams(-1,-2))
         val page=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(20),dp(20),dp(28));setBackgroundColor(bg)}
-        val scroll=ScrollView(this).apply{addView(page)}
-        page.addView(txt("MY INVEST",13,green,true));page.addView(txt(title,26,ink,true,8));if(sub!=null)page.addView(txt(sub,14,muted,false,5))
-        return scroll to page
+        val scroll=ScrollView(this).apply{isFillViewport=true;addView(page)}
+        shell.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
+        page.addView(txt(title,26,ink,true));if(sub!=null)page.addView(txt(sub,14,muted,false,7))
+        return shell to page
+    }
+
+    private fun aboutPage(){
+        val(screen,page)=root("About Everest Capital","Clarity, visibility, and account information in one place.")
+        page.addView(card().apply{
+            addView(txt("Our purpose",18,ink,true))
+            addView(txt("Everest Capital is an investment account interface designed to help account holders review their recorded balances, explore available investment plans, and track requests submitted for administrator review.",14,muted,false,10))
+            addView(txt("What you can do",16,ink,true,18))
+            addView(txt("View profit and account figures in US dollars, review available plan details, check transaction history, manage profile information, and submit investment or withdrawal requests where those features are enabled.",14,muted,false,8))
+            addView(txt("Important investment information",16,ink,true,18))
+            addView(txt("Investment values can rise or fall. Displayed estimates are not guaranteed returns and past performance does not assure future results. Submitting a request in the app does not itself transfer money; requests may require administrator review. Consider the risks and review all applicable terms before making financial decisions.",13,muted,false,8))
+            addView(txt("Account security",16,ink,true,18))
+            addView(txt("Access to account balances depends on the configured cloud service and account permissions. Keep your sign-in details private and contact the app administrator if you notice activity you do not recognize.",13,muted,false,8))
+        },mp(18))
+        page.addView(txt("© 2026 Everest Capital. All rights reserved.",11,muted,false,22))
+        page.addView(txt("Everest Capital is an app name and does not, by itself, imply regulatory authorization, deposit protection, or guaranteed investment performance.",11,muted,false,8))
+        page.addView(btn("Back to dashboard",false){if(p.getBoolean("logged",false))dashboard() else auth(false)},mp(14))
+        showPage(screen)
     }
     private fun auth(register:Boolean){
-        val(scroll,page)=root(if(register)"Create account" else "Welcome back",if(register)"Create your MY INVEST account" else "Sign in securely to your cloud account")
+        val(scroll,page)=root(if(register)"Create account" else "Welcome back",if(register)"Create your Everest Capital account" else "Sign in securely to your cloud account")
         val name=input("Full name").apply{visibility=if(register)View.VISIBLE else View.GONE}
         val email=input("Email address",InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS)
         val pass=input("Password",InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
@@ -215,7 +266,7 @@ class MainActivity : AppCompatActivity() {
         showPage(scroll)
     }
     private fun resetPasswordScreen(accessToken:String) {
-        val(scroll,page)=root("Set a new password","Choose a new password for your MY INVEST account")
+        val(scroll,page)=root("Set a new password","Choose a new password for your Everest Capital account")
         val password=input("New password",InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
         val confirm=input("Confirm new password",InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
         page.addView(card().apply {
