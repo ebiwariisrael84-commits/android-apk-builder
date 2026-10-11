@@ -138,6 +138,26 @@ class SupabaseClient(private val projectUrl: String, private val publishableKey:
             "/rest/v1/transactions?select=id,transaction_type,amount,status,description,created_at&user_id=eq.$userId&order=created_at.desc&limit=100",
             null, accessToken).body)
 
+    fun fetchPendingKyc(accessToken: String): JSONArray =
+        JSONArray(request("GET", "/rest/v1/kyc_submissions?select=id,user_id,document_type,id_image_path,face_image_path,status,created_at&status=eq.pending&order=created_at.asc&limit=100", null, accessToken).body)
+
+    fun reviewKyc(accessToken: String, submissionId: String, status: String, reason: String) {
+        val userId = request("GET", "/auth/v1/user", null, accessToken).json().optString("id")
+        request("PATCH", "/rest/v1/kyc_submissions?id=eq.$submissionId",
+            JSONObject().put("status", status).put("review_reason", reason)
+                .put("reviewed_by", userId).put("reviewed_at", java.time.Instant.now().toString()).toString(),
+            accessToken)
+    }
+
+    fun signedKycUrl(accessToken: String, path: String): String {
+        val encoded = path.split("/").joinToString("/") { java.net.URLEncoder.encode(it, "UTF-8").replace("+", "%20") }
+        val response = request("POST", "/storage/v1/object/sign/kyc-documents/" + encoded,
+            JSONObject().put("expiresIn", 300).toString(), accessToken)
+        val signed = response.json().optString("signedURL")
+        if (signed.isBlank()) throw ApiException(response.status, "Could not create a temporary document link.")
+        return if (signed.startsWith("http")) signed else baseUrl + "/storage/v1" + (if (signed.startsWith("/")) signed else "/$signed")
+    }
+
     fun fetchPendingInvestments(accessToken: String): JSONArray =
         JSONArray(request("GET", "/rest/v1/investments?select=id,user_id,principal_amount,fixed_profit_amount,status,created_at&status=eq.pending&order=created_at.asc&limit=100", null, accessToken).body)
 
