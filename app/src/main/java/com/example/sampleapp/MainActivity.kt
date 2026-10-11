@@ -381,6 +381,7 @@ class MainActivity : AppCompatActivity() {
             addView(search)
             addView(btn("Search users",true){adminDashboard(search.text.toString().trim())},mp(10))
         },mp(16))
+        page.addView(btn("Manage investment plans",false){adminPlanManagement()},mp(8))
         val token=cloudAccessToken ?: p.getString("cloud_access_token",null)
         if(token==null){page.addView(txt("Please sign in again.",13,muted,false,12));setContentView(scroll);return}
         val loading=txt("Loading cloud users…",13,muted,false,14);page.addView(loading)
@@ -533,6 +534,53 @@ class MainActivity : AppCompatActivity() {
             }catch(e:Exception){runOnUiThread{toast("Investment review failed: "+(e.message ?: "Cloud error"))}}
         }
     }
+    private fun adminPlanManagement() {
+        if(cloudRole!="admin"){toast("Administrator access required.");return}
+        val token=cloudAccessToken ?: p.getString("cloud_access_token",null)
+        val(scroll,page)=root("Investment plan management","Edit the six plans. Changes are restricted to administrators and recorded in the audit log.")
+        if(token==null){page.addView(txt("Please sign in again.",13,muted,false,12));setContentView(scroll);return}
+        val status=txt("Loading plans from cloud…",13,muted,false,10);page.addView(status)
+        page.addView(btn("Back to administrator tools",false){adminDashboard()},mp(14))
+        setContentView(scroll)
+        thread {
+            try {
+                val plans=cloud.fetchAdminPlans(token)
+                runOnUiThread {
+                    status.text=if(plans.length()==0)"No plans found." else "Loaded "+plans.length()+" plans"
+                    for(i in 0 until plans.length()) {
+                        val plan=plans.optJSONObject(i) ?: continue
+                        val planId=plan.optString("id")
+                        val nameField=input("Plan name").apply{setText(plan.optString("name"))}
+                        val minField=input("Minimum amount (USD)",InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL).apply{setText(plan.optDouble("minimum_amount").toString())}
+                        val rateField=input("Configured rate (%)",InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL).apply{setText(plan.optDouble("fixed_profit_rate").toString())}
+                        val activeSwitch=Switch(this@MainActivity).apply{text="Plan active";isChecked=plan.optBoolean("is_active")}
+                        page.addView(card().apply {
+                            addView(txt(plan.optString("icon")+"  "+plan.optString("slug").uppercase(Locale.ROOT),15,ink,true))
+                            addView(nameField,mp(10));addView(minField,mp(8));addView(rateField,mp(8));addView(activeSwitch,mp(8))
+                            addView(txt("Configured rate is not a guarantee of profit.",11,muted,false,6))
+                            addView(btn("Save plan changes",true) {
+                                val n=nameField.text.toString().trim()
+                                val minimum=minField.text.toString().toDoubleOrNull()
+                                val rate=rateField.text.toString().toDoubleOrNull()
+                                when {
+                                    n.length<2 -> toast("Enter a valid plan name.")
+                                    minimum==null || minimum<=0 -> toast("Minimum amount must be greater than zero.")
+                                    rate==null || rate<0 || rate>100 -> toast("Configured rate must be between 0 and 100.")
+                                    else -> thread {
+                                        try {
+                                            cloud.adminUpdatePlan(token,planId,n,minimum,rate,activeSwitch.isChecked)
+                                            runOnUiThread { toast(n+" plan saved.");adminPlanManagement() }
+                                        } catch(e:Exception) { runOnUiThread { toast("Plan update failed: "+(e.message ?: "Cloud error")) } }
+                                    }
+                                }
+                            },mp(12))
+                        },mp(10))
+                    }
+                }
+            } catch(e:Exception) { runOnUiThread { status.text="Could not load plans: "+(e.message ?: "Cloud error") } }
+        }
+    }
+
     private fun changeUserStatus(userId:String,status:String,reason:String,query:String){
         val token=cloudAccessToken ?: p.getString("cloud_access_token",null) ?: run{toast("Please sign in again.");return}
         thread{
