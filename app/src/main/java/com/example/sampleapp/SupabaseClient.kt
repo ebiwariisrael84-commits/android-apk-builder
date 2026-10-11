@@ -134,6 +134,9 @@ class SupabaseClient(private val projectUrl: String, private val publishableKey:
     fun fetchPlans(accessToken: String): JSONArray =
         JSONArray(request("GET", "/rest/v1/investment_plans?select=id,slug,name,icon,minimum_amount,fixed_profit_rate,is_active&is_active=eq.true&order=minimum_amount.asc", null, accessToken).body)
 
+    fun fetchInvestments(accessToken: String): JSONArray =
+        JSONArray(request("GET", "/rest/v1/investments?select=id,plan_id,principal_amount,fixed_profit_amount,fixed_profit_rate,status,created_at,updated_at,investment_plans(name,slug,icon)&order=created_at.desc&limit=100", null, accessToken).body)
+
     fun fetchAdminPlans(accessToken: String): JSONArray =
         JSONArray(request("GET", "/rest/v1/investment_plans?select=id,slug,name,icon,minimum_amount,fixed_profit_rate,is_active&order=minimum_amount.asc", null, accessToken).body)
 
