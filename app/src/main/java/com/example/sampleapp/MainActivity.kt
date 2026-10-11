@@ -275,7 +275,7 @@ class MainActivity : AppCompatActivity() {
             addView(txt(if(selectedIdImageUri==null)"No ID image selected" else "ID image selected",12,green,true,6))
             addView(btn("Choose face/passport photo",false){pickKycImage(1002)},mp(12))
             addView(txt(if(selectedFaceImageUri==null)"No face photo selected" else "Face photo selected",12,green,true,6))
-            val docType=Spinner(this).apply{adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,arrayOf("National ID","Passport","Driver's licence","Voter's card"))}
+            val docType=Spinner(this@MainActivity).apply{adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,arrayOf("National ID","Passport","Driver's licence","Voter's card"))}
             addView(txt("ID document type",13,muted,true,12));addView(docType,mp(4))
             addView(btn("Submit identity verification",true){
                 val idUri=selectedIdImageUri;val faceUri=selectedFaceImageUri
