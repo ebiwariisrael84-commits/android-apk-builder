@@ -36,6 +36,15 @@ class MainActivity : AppCompatActivity() {
         window.decorView.systemUiVisibility=View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
         auth(false)
         val incoming=intent?.data
+        if(incoming?.scheme=="myinvest" && incoming.host=="confirm-email") {
+            val params=(incoming.query.orEmpty()+"&"+incoming.fragment.orEmpty()).split("&").mapNotNull { part ->
+                val pieces=part.split("=", limit=2)
+                if(pieces.size==2) pieces[0] to Uri.decode(pieces[1].replace("+","%2B")) else null
+            }.toMap()
+            val error=params["error_description"] ?: params["error"]
+            if(!error.isNullOrBlank()) toast("Email confirmation failed: "+error.replace("+"," "))
+            else toast("Email confirmed successfully. Sign in with your email and password to continue.")
+        }
         if(incoming?.scheme=="myinvest" && incoming.host=="reset-password") {
             val fragment=incoming.fragment.orEmpty().split("&").mapNotNull { part ->
                 val pieces=part.split("=", limit=2)
