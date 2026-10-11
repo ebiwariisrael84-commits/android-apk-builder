@@ -155,6 +155,13 @@ jobs:
                   'if(lastHistoryRow.isEmpty()){lastHistoryRow=new ArrayList<Double>(current);int seedCount=Math.min(5,current.size());synchronized(lock){for(int i=seedCount-1;i>=0;i--){double x=current.get(i);rounds.add(x);model.observe(x,rounds.size());newDataCount++;enqueueCloudObservation(x,raw,sourceKind,ocrConfidence);}}lastCompletedRound=current.get(0);lastFreshRoundMs=System.currentTimeMillis();historyDiagnostic="history row seeded • "+seedCount+" completed history runs loaded • collecting new runs";saveRounds();return;}',
                   'seed five visible history runs immediately')
           replace('else if(a.size()<8)', 'else if(a.size()<5)', 'estimate after five completed rounds')
+          # Historical history-strip values, not the large changing live multiplier, train the model.
+          s = s.replace('evaluatePendingRound(accepted);rounds.add(accepted);model.observe(accepted,rounds.size());newDataCount++;', '')
+          s = s.replace('enqueueCloudObservation(accepted,"changing rendered multiplier candidate","dom_text",0.55);', '')
+          s = s.replace('evaluatePendingRound(crawlerNewest); rounds.add(crawlerNewest); model.observe(crawlerNewest,rounds.size());', '')
+          s = s.replace('enqueueCloudObservation(crawlerNewest,"URL crawler parsed multiplier "+String.format(Locale.US,"%.3fx",crawlerNewest),"dom_text",0.55);', '')
+          # Five completed history values are sufficient to start estimation even if the live-flight display is temporarily stale.
+          replace('if(!fresh){ predictionReady=false;', 'if(!fresh && a.size()<5){ predictionReady=false;', 'allow estimate from five completed history values')
           # Bump the Android version so this build installs as an update over v25.
           p.write_text(s)
           manifest = Path("/tmp/aviator-v25/AndroidManifest.xml")
