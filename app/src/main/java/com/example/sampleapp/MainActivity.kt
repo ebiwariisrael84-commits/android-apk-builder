@@ -178,12 +178,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun aboutPage(){
-        val(screen,page)=root("About Evercrest Capital","Clarity, visibility, and account information in one place.")
+        val(screen,page)=root("About Evercrest Capital","Explore information about five companies associated with Elon Musk.")
         page.addView(card().apply{
-            addView(txt("Our purpose",18,ink,true))
-            addView(txt("Evercrest Capital is an investment account interface designed to help account holders review their recorded balances, explore available investment plans, and track requests submitted for administrator review.",14,muted,false,10))
+            addView(txt("Our focus",18,ink,true))
+            addView(txt("Evercrest Capital highlights five companies associated with Elon Musk — Tesla, SpaceX / Starlink, xAI, Neuralink, and The Boring Company — and provides links to official company or investor-information pages. It is designed to help users explore these businesses and learn where legitimate investment opportunities may be available.",14,muted,false,10))
+            addView(txt("Important: what your money means",16,ink,true,18))
+            addView(txt("Viewing these companies in Evercrest does not mean your Evercrest deposit has purchased their shares. The app currently provides information links and investment-request tracking; a request or account balance is not proof of a stock purchase. Do not treat funds as invested in any of these companies unless a verified, legally authorized broker or offering completes the transaction and provides confirmation in your name.",13,muted,false,8))
             addView(txt("What you can do",16,ink,true,18))
-            addView(txt("View profit and account figures in US dollars, review available plan details, check transaction history, manage profile information, and submit investment or withdrawal requests where those features are enabled.",14,muted,false,8))
+            addView(txt("View account figures in US dollars, explore the five featured companies, open official company or investor-information links, review plan details, check transaction history, manage your profile, and submit requests where enabled. Requests in Evercrest are not themselves stock trades or money transfers.",14,muted,false,8))
             addView(txt("Important investment information",16,ink,true,18))
             addView(txt("Investment values can rise or fall. Displayed estimates are not guaranteed returns and past performance does not assure future results. Submitting a request in the app does not itself transfer money; requests may require administrator review. Consider the risks and review all applicable terms before making financial decisions.",13,muted,false,8))
             addView(txt("Account security",16,ink,true,18))
@@ -468,7 +470,7 @@ class MainActivity : AppCompatActivity() {
         page.addView(txt("Explore company information and official links",13,muted,false,5))
         page.addView(card().apply {
             addView(txt("Important investment notice",15,ink,true))
-            addView(txt("Evercrest Capital is not affiliated with, endorsed by, or an official investment partner of Elon Musk or the companies below. These links are for information and to reach official company or investor-relations pages. They do not mean that money deposited in Evercrest is invested in these companies. Only invest through a verified, legally authorized broker or official offering. Publicly traded shares can lose value; private-company shares may not be available to the public.",12,muted,false,8))
+            addView(txt("Evercrest Capital features information about these five Elon Musk-associated companies, but it is not affiliated with or endorsed by Elon Musk or these businesses. Important: depositing money with Evercrest or submitting an investment-plan request does NOT by itself buy shares in Tesla, SpaceX / Starlink, xAI, Neuralink, or The Boring Company. The company cards link to official information pages; they are not trade-execution links. Only a completed transaction through a verified, legally authorized broker or official offering—with a trade confirmation—establishes a stock purchase. Public shares can lose value, and private-company shares may not be available to the public.",12,muted,false,8))
         },mp(12))
         val muskCompanies = listOf(
             Triple("Tesla, Inc.","Electric vehicles, energy storage and AI • NASDAQ: TSLA","https://ir.tesla.com/"),
@@ -533,9 +535,13 @@ class MainActivity : AppCompatActivity() {
     private data class Plan(val name:String,val icon:String,val min:Float,val tagline:String,val details:String)
     private val planList=listOf(Plan("Bronze","🥉",250f,"A simple starting tier","Portfolio overview and transaction tracking"),Plan("Silver","🥈",500f,"For growing portfolios","Portfolio tracking and plan history"),Plan("Gold","🥇",1000f,"For established investors","Expanded portfolio summaries"),Plan("Platinum","💎",5000f,"For larger portfolios","Full plan overview and account reporting"),Plan("Diamond","💠",10000f,"A premium investment tier","Enhanced portfolio reporting and history"),Plan("Elite","👑",25000f,"The highest membership tier","Premium account overview and reporting"))
     private fun plans(){
-        val(scroll,page)=root("Investment plans","Choose from the currently active plans")
+        val(scroll,page)=root("Investment plans","Review Evercrest account plans and the important stock-investment distinction")
         val token=cloudAccessToken ?: p.getString("cloud_access_token",null)
         val loading=txt("Loading plans from your cloud account…",13,muted,false,12)
+        page.addView(card().apply {
+            addView(txt("About the featured companies",15,ink,true))
+            addView(txt("Evercrest features Tesla, SpaceX / Starlink, xAI, Neuralink, and The Boring Company for information. An Evercrest plan request is not a purchase of shares in these companies, and deposits are not automatically routed to them. Use a verified, legally authorized broker or official offering for stock purchases and keep the transaction confirmation.",12,muted,false,8))
+        },mp(12))
         page.addView(loading)
         page.addView(btn("Back to dashboard",false){dashboard()},mp(18))
         showPage(scroll)
