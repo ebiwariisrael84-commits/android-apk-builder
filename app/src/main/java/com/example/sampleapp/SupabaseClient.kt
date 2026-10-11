@@ -81,6 +81,15 @@ class SupabaseClient(private val projectUrl: String, private val publishableKey:
             "/rest/v1/transactions?select=id,transaction_type,amount,status,description,created_at&user_id=eq.$userId&order=created_at.desc&limit=100",
             null, accessToken).body)
 
+    fun fetchPendingInvestments(accessToken: String): JSONArray =
+        JSONArray(request("GET", "/rest/v1/investments?select=id,user_id,principal_amount,fixed_profit_amount,status,created_at&status=eq.pending&order=created_at.asc&limit=100", null, accessToken).body)
+
+    fun adminReviewInvestment(accessToken: String, investmentId: String, decision: String, reason: String) {
+        request("POST", "/rest/v1/rpc/admin_review_investment",
+            JSONObject().put("p_investment_id", investmentId).put("p_decision", decision)
+                .put("p_reason", reason).toString(), accessToken)
+    }
+
     fun searchUsers(accessToken: String, email: String): JSONArray {
         val filter = if (email.isBlank()) "" else "&email=ilike.*" + java.net.URLEncoder.encode(email.trim(), "UTF-8") + "*"
         return JSONArray(request("GET",
