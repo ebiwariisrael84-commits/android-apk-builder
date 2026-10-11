@@ -18,7 +18,8 @@ class SupabaseClient(private val projectUrl: String, private val publishableKey:
     fun isConfigured() = baseUrl.startsWith("https://") && publishableKey.isNotBlank()
 
     fun signUp(email: String, password: String, fullName: String) = request(
-        "POST", "/auth/v1/signup",
+        "POST", "/auth/v1/signup?redirect_to=" +
+            java.net.URLEncoder.encode("myinvest://confirm-email", "UTF-8"),
         JSONObject().put("email", email).put("password", password)
             .put("data", JSONObject().put("full_name", fullName)).toString()
     )
