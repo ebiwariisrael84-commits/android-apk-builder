@@ -163,6 +163,66 @@ jobs:
           # Five completed history values are sufficient to start estimation even if the live-flight display is temporarily stale.
           replace('if(!fresh){ predictionReady=false;', 'if(!fresh && a.size()<5){ predictionReady=false;', 'allow estimate from five completed history values')
           # Bump the Android version so this build installs as an update over v25.
+          # Fix the display pipeline: the prediction panel must not depend on a fresh live multiplier.
+          refresh_start = s.index("    void refreshUi(){")
+          refresh_end = s.index("    void startUiWatchdog(){", refresh_start)
+          new_refresh = r'''    void refreshUi(){
+              ArrayList<Double>a; synchronized(lock){a=new ArrayList<Double>(rounds);}
+              Analysis z=analyze(a);
+              boolean lowData=a.size()<5;
+              boolean modelQualified=z.signal && !lowData;
+              if(lowData || !z.signal || z.center<1.01 || z.hi<=z.lo || Double.isNaN(z.center) || Double.isInfinite(z.center)){
+                  if(z.center<1.01 || z.hi<=z.lo || Double.isNaN(z.center) || Double.isInfinite(z.center)){
+                      double c=a.isEmpty()?1.50:median(a,Math.max(0,a.size()-Math.min(12,a.size())));
+                      double spread=a.size()<2?0.50:Math.max(0.25,Math.min(3.0,recentMad(a)*2.2));
+                      z.center=Math.max(1.01,Math.min(1000.0,c));
+                      z.lo=Math.max(1.01,z.center-spread);
+                      z.hi=z.center+spread;
+                  }
+                  if(lowData){z.conf=Math.min(25.0,a.size()*5.0);z.agreement=0;z.acc=0;z.nnAcc=0;z.medAcc=0;z.anom=0;z.regime="LOW DATA";}
+                  z.signal=true;
+              }
+              predictionReady=true;
+              latest.setText(String.format(Locale.US,"PREDICTED VALUE %.2fx",z.center));
+              prediction.setText(String.format(Locale.US,"ESTIMATED BAND %.2fx–%.2fx",z.lo,z.hi));
+              if(modelQualified){
+                  confidence.setText(String.format(Locale.US,"Model score %.0f/100 • agreement %.0f%% • not a win probability",z.conf,z.agreement));
+                  intelligence.setText(String.format(Locale.US,"Online learner %.0f%% • k-NN %.0f%% • baseline %.0f%%",z.acc,z.nnAcc,z.medAcc));
+                  audit.setText("Prediction state: READY • based on completed-round learning");
+              }else{
+                  confidence.setText(String.format(Locale.US,"LOW DATA / UNVERIFIED • %d completed runs • not a win probability",a.size()));
+                  intelligence.setText(a.isEmpty()?"Fallback baseline only • no completed history yet":"Fallback estimate from available history • model reliability gate not passed");
+                  audit.setText("Prediction state: DISPLAYING ESTIMATE • low-data / unverified");
+              }
+              accuracy.setText(String.format(Locale.US,"Session: %d completed rounds • backtest %.1f%% • band hits %d/%d",a.size(),z.acc,sessionBandHits,sessionEvaluated));
+              dashboard.setText(String.format(Locale.US,"Calculation: center %.2fx • spread %.2fx • regime %s",z.center,(z.hi-z.lo)/2.0,z.regime==null?"LOW DATA":z.regime));
+              anomaly.setText(String.format(Locale.US,"Analysis: anomaly %.2f • agreement %.1f%%",z.anom,z.agreement));
+              if(!pendingPrediction){pendingCenter=z.center;pendingLow=z.lo;pendingHigh=z.hi;pendingPrediction=true;}
+              if(chart!=null)chart.setData(a);
+              if(historyBox!=null){historyBox.removeAllViews();int start=Math.max(0,a.size()-20);for(int i=a.size()-1;i>=start;i--){TextView h=text(String.format(Locale.US,"%03d   %.2fx",i+1,a.get(i)),12,Color.WHITE);h.setPadding(dp(8),dp(6),dp(8),dp(6));historyBox.addView(h);}}
+              if(sessionHealth!=null)sessionHealth.setText(String.format(Locale.US,"Source health: crawler %s • iframe %s • %d observations • %d unchanged",lastSource.length()>0?"connected":"waiting",iframeArmed?"reading":"waiting",observationCount,unchangedCaptureCount));
+              updateAdvancedInsights();
+          }
+
+          '''
+          s = s[:refresh_start] + new_refresh + s[refresh_end:]
+          # The watchdog may report stale live input, but must never overwrite the prediction/band.
+          watchdog_start = s.index("    void startUiWatchdog(){")
+          watchdog_end = s.index("    void updateAdvancedInsights(){", watchdog_start)
+          new_watchdog = r'''    void startUiWatchdog(){watchdogTask=new Runnable(){public void run(){if(activityDestroyed)return;long age=lastFreshRoundMs==0?Long.MAX_VALUE:System.currentTimeMillis()-lastFreshRoundMs;if(age>4500){liveMultiplier=0.0;if(latest!=null && prediction==null)latest.setText("NO FRESH LIVE READING");if(aiState!=null)aiState.setText("Analytics: history-based estimate active • live feed stale");}else if(liveMultiplier>0&&browserStatus!=null)browserStatus.setText(String.format(Locale.US,"Live multiplier: %.2fx • prediction shown separately",liveMultiplier));if(prediction!=null)refreshUi();mainHandler.postDelayed(this,1000);}};mainHandler.postDelayed(watchdogTask,1000);}
+          '''
+          s = s[:watchdog_start] + new_watchdog + s[watchdog_end:]
+          # Keep prediction display independent from live value and label the card accurately.
+          s = s.replace('label("LIVE ANALYSIS  /  PRIMARY SIGNAL")','label("LIVE ANALYSIS  /  NEXT ROUND ESTIMATE")')
+          s = s.replace('latest=text("WAITING FOR LIVE FIGURES",25,Color.rgb(255,58,58))','latest=text("PREDICTION INITIALIZING",25,Color.rgb(255,58,58))')
+          # Refresh immediately when history seeding or new rounds arrive.
+          s = s.replace('historyDiagnostic="history row seeded • "+seedCount+" completed history runs loaded • collecting new runs";saveRounds();return;',
+                        'historyDiagnostic="history row seeded • "+seedCount+" completed history runs loaded • collecting new runs";saveRounds();mainHandler.post(new Runnable(){public void run(){refreshUi();}});return;')
+          s = s.replace('historyDiagnostic="history row active • "+added+" new round(s) recorded • "+current.size()+" values visible";saveRounds();}',
+                        'historyDiagnostic="history row active • "+added+" new round(s) recorded • "+current.size()+" values visible";saveRounds();mainHandler.post(new Runnable(){public void run(){refreshUi();}});}')
+          # Bump to v27 so Android treats this as a new install/update.
+          s = s.replace('android:versionCode="26" android:versionName="26.0-History-First-Session-Learning"',
+                        'android:versionCode="27" android:versionName="27.0-Prediction-Always-Visible"')
           p.write_text(s)
           manifest = Path("/tmp/aviator-v25/AndroidManifest.xml")
           m = manifest.read_text()
