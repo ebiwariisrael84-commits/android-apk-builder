@@ -1,6 +1,6 @@
 <resources>
-    <string name="app_name">My Invest Preview</string>
-    <string name="welcome_message">My Invest</string>
+    <string name="app_name">MY INVEST</string>
+    <string name="welcome_message">MY INVEST</string>
     <string name="click_me">Open dashboard</string>
-    <string name="initial_count">Preview build</string>
+    <string name="initial_count">MY INVEST</string>
 </resources>
