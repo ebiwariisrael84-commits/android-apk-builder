@@ -63,6 +63,14 @@ class SupabaseClient(private val projectUrl: String, private val publishableKey:
         return if (rows.length() > 0) rows.getJSONObject(0) else JSONObject()
     }
 
+    fun fetchProfileDetails(accessToken: String, userId: String): JSONObject {
+        val rows = JSONArray(request("GET",
+            "/rest/v1/profiles?select=id,email,full_name,country,date_of_birth,address,phone,role,account_status&id=eq.$userId",
+            null, accessToken).body)
+        if (rows.length() == 0) throw ApiException(404, "Cloud profile not found.")
+        return rows.getJSONObject(0)
+    }
+
     fun updateProfile(accessToken: String, fullName: String, country: String, dateOfBirth: String, address: String, phone: String) {
         val userId = request("GET", "/auth/v1/user", null, accessToken).json().optString("id")
         request("PATCH", "/rest/v1/profiles?id=eq.$userId",
