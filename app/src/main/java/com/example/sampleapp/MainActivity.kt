@@ -59,18 +59,22 @@ class MainActivity : AppCompatActivity() {
             if(fragment["type"]=="recovery" && !resetToken.isNullOrBlank()) { resetPasswordScreen(resetToken); return }
         }
         val savedRefresh=p.getString("cloud_refresh_token",null)
-        if(savedRefresh!=null && cloud.isConfigured()) thread {
+        if(savedRefresh!=null && cloud.isConfigured()) {
+            showLoading("Restoring your secure session…")
+            thread {
             try {
                 val session=cloud.refresh(savedRefresh)
                 val profile=cloud.fetchProfile(session.accessToken,session.userId)
                 runOnUiThread {
                     saveSession(session)
                     if(profile.optString("account_status")=="approved") {
+                        hideLoading()
                         p.edit().putString("account_name",profile.optString("full_name","Investor")).putString("account_email",session.email).putBoolean("logged",true).apply()
                         cloudRole=profile.optString("role","investor"); loadCloudWalletThenDashboard()
-                    } else { p.edit().remove("cloud_access_token").remove("cloud_refresh_token").putBoolean("logged",false).apply(); auth(false); toast("Your account is "+profile.optString("account_status","pending")+". Dashboard access requires administrator approval.") }
+                    } else { hideLoading(); p.edit().remove("cloud_access_token").remove("cloud_refresh_token").putBoolean("logged",false).apply(); auth(false); toast("Your account is "+profile.optString("account_status","pending")+". Dashboard access requires administrator approval.") }
                 }
-            } catch (_:Exception) { runOnUiThread { p.edit().putBoolean("logged",false).apply(); auth(false); toast("Could not reconnect to your cloud account. Check internet and sign in again to retry.") } }
+            } catch (_:Exception) { runOnUiThread { hideLoading(); p.edit().putBoolean("logged",false).apply(); auth(false); toast("Could not reconnect to your cloud account. Check internet and sign in again to retry.") } }
+            }
         }
     }
     override fun onNewIntent(intent: Intent) {
@@ -155,7 +159,7 @@ class MainActivity : AppCompatActivity() {
         showLoading("Loading your secure investment dashboard…")
         val token=cloudAccessToken ?: p.getString("cloud_access_token",null)
         val uid=cloudUserId ?: p.getString("cloud_user_id",null)
-        if(token==null || uid==null) { auth(false); return }
+        if(token==null || uid==null) { hideLoading(); auth(false); return }
         thread {
             try {
                 val wallet=cloud.fetchWallet(token,uid)
@@ -182,6 +186,7 @@ class MainActivity : AppCompatActivity() {
         val name=input("Full name").apply{visibility=if(register)View.VISIBLE else View.GONE}
         val email=input("Email address",InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS)
         val pass=input("Password",InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
+        page.addView(txt("Your money, clearly in view",15,green,true,10))
         page.addView(card().apply{
             addView(name);addView(email,mp(12));addView(pass,mp(12))
             addView(btn("Continue with Google",false){ startGoogleSignIn() },mp(14))
@@ -194,7 +199,7 @@ class MainActivity : AppCompatActivity() {
                     !e.contains("@")||!e.contains(".")->toast("Enter a valid email.")
                     pw.length<8->toast("Password must contain at least 8 characters.")
                     else->{
-                        val action=btn(if(register)"Create account" else "Sign in",true){}
+                        showLoading(if(register) "Creating your secure account…" else "Signing you in securely…")
                         thread {
                             try {
                                 if(register) {
@@ -231,6 +236,8 @@ class MainActivity : AppCompatActivity() {
                                 }
                             } catch(e:Exception) {
                                 runOnUiThread { toast("Cloud connection failed: "+(e.message ?: "Please try again.")) }
+                            } finally {
+                                hideLoading()
                             }
                         }
                     }
@@ -796,8 +803,8 @@ class MainActivity : AppCompatActivity() {
     private fun amt(key:String)=p.getFloat(key,0f)
     private fun money(v:Float)="$"+String.format(Locale.US,"%,.2f",v)
     private fun hash(v:String)=MessageDigest.getInstance("SHA-256").digest(v.toByteArray()).joinToString(""){"%02x".format(it)}
-    private fun input(h:String,type:Int=InputType.TYPE_CLASS_TEXT)=EditText(this).apply{hint=h;textSize=15f;setSingleLine(true);inputType=type;setPadding(dp(14),dp(12),dp(14),dp(12));setBackgroundColor(Color.WHITE)}
-    private fun card()=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(18),dp(18),dp(18),dp(18));setBackgroundColor(Color.WHITE);elevation=dp(2).toFloat()}
+    private fun input(h:String,type:Int=InputType.TYPE_CLASS_TEXT)=EditText(this).apply{hint=h;textSize=15f;setSingleLine(true);inputType=type;setPadding(dp(14),dp(12),dp(14),dp(12));background=android.graphics.drawable.GradientDrawable().apply{setColor(Color.WHITE);cornerRadius=dp(12).toFloat();setStroke(dp(1),Color.rgb(224,231,228))}}
+    private fun card()=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(18),dp(18),dp(18),dp(18));background=android.graphics.drawable.GradientDrawable().apply{setColor(Color.WHITE);cornerRadius=dp(18).toFloat();setStroke(dp(1),Color.rgb(235,239,237))};elevation=dp(2).toFloat()}
     private fun rowMetric(label:String,value:String)=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=android.view.Gravity.CENTER_VERTICAL;addView(txt(label,13,Color.rgb(218,225,232),false),LinearLayout.LayoutParams(0,-2,1f));addView(txt(value,15,Color.WHITE,true));setPadding(0,dp(5),0,dp(5))}
     private fun txt(s:String,size:Int,color:Int,bold:Boolean,top:Int=0)=TextView(this).apply{text=s;textSize=size.toFloat();setTextColor(color);if(bold)typeface=android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.BOLD);if(top>0)setPadding(0,dp(top),0,0)}
     private fun btn(label:String,primary:Boolean,click:()->Unit)=Button(this).apply{text=label;textSize=13f;isAllCaps=false;setTextColor(if(primary)Color.WHITE else green);backgroundTintList=android.content.res.ColorStateList.valueOf(if(primary)green else pale);setOnClickListener{click()}}
