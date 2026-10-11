@@ -102,6 +102,13 @@ class SupabaseClient(private val projectUrl: String, private val publishableKey:
         return if (rows.length() == 0) "not_submitted" else rows.getJSONObject(0).optString("status", "pending")
     }
 
+    fun fetchLatestKycFacePath(accessToken: String, userId: String): String {
+        val rows = JSONArray(request("GET",
+            "/rest/v1/kyc_submissions?select=face_image_path&user_id=eq.$userId&order=created_at.desc&limit=1",
+            null, accessToken).body)
+        return if (rows.length() == 0) "" else rows.getJSONObject(0).optString("face_image_path", "")
+    }
+
     fun uploadKycImage(accessToken: String, userId: String, kind: String, bytes: ByteArray, contentType: String): String {
         if (bytes.isEmpty() || bytes.size > 8 * 1024 * 1024) throw ApiException(400, "Choose an image smaller than 8 MB.")
         val path = userId + "/" + kind + "-" + System.currentTimeMillis() + ".jpg"
