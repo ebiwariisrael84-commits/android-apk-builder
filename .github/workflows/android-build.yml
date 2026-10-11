@@ -49,6 +49,83 @@ jobs:
           test -f /tmp/aviator-v25/src/com/aviator/live/MainActivity.java
           echo "Verified Aviator Predictor v25 source files."
 
+      - name: Apply session-learning and prediction audit updates
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("/tmp/aviator-v25/src/com/aviator/live/MainActivity.java")
+          s = p.read_text()
+          def replace(old, new, label, count=1):
+              global s
+              n = s.count(old)
+              if n < count:
+                  raise SystemExit(f"Patch failed ({label}): expected at least {count} match(es), got {n}")
+              s = s.replace(old, new, count)
+              print(f"Applied {label}: {count}")
+          # Session history must begin fresh on every app launch; don't reload previous session's rounds.
+          replace('void loadRounds(){ String s=prefs.getString("rounds",""); if(s.length()==0)return; String[] p=s.split(","); synchronized(lock){ for(String q:p)try{double x=Double.parseDouble(q);if(x>=1&&x<=100000)rounds.add(x);}catch(Exception e){} } }',
+                  'void loadRounds(){ synchronized(lock){ rounds.clear(); } lastHistoryRow.clear(); lastCompletedRound=0; pendingPrediction=false; sessionEvaluated=0; sessionBandHits=0; sessionPointHits=0; }',
+                  'session-only history')
+          # Keep round history in memory only; persist diagnostics but never the round sequence.
+          replace('void saveRounds(){ StringBuilder b=new StringBuilder(); synchronized(lock){ for(double x:rounds){if(b.length()>0)b.append(\',\');b.append(x);} } prefs.edit().putString("rounds",b.toString()).putLong("observation_count",observationCount).putLong("unchanged_capture_count",unchangedCaptureCount).putLong("gap_count",gapCount).apply(); }',
+                  'void saveRounds(){ prefs.edit().remove("rounds").putLong("observation_count",observationCount).putLong("unchanged_capture_count",unchangedCaptureCount).putLong("gap_count",gapCount).apply(); }',
+                  'nonpersistent round history')
+          # Session learner parameters are reset as well; historical weights cannot silently leak across sessions.
+          replace('model=new OnlineModel(prefs);', 'model=new OnlineModel(prefs); model.reset();', 'reset learner per session')
+          # Add a one-button connect flow that opens the page, starts the URL crawler and capture loop.
+          replace('LinearLayout sb=new LinearLayout(this); Button open=button("OPEN"); Button fetch=button("CRAWL URL"); Button reconnect=button("RECONNECT"); sb.addView(open,new LinearLayout.LayoutParams(0,dp(46),1)); sb.addView(fetch,new LinearLayout.LayoutParams(0,dp(46),1)); sb.addView(reconnect,new LinearLayout.LayoutParams(0,dp(46),1)); source.addView(sb);',
+                  'LinearLayout sb=new LinearLayout(this); Button connect=button("CONNECT"); sb.addView(connect,new LinearLayout.LayoutParams(-1,dp(48))); source.addView(sb);',
+                  'single connect button')
+          replace('open.setOnClickListener(new View.OnClickListener(){public void onClick(View v){openBrowser(endpoint.getText().toString().trim());}});',
+                  'connect.setOnClickListener(new View.OnClickListener(){public void onClick(View v){String url=endpoint.getText().toString().trim();openBrowser(url);startLive();reconnectCapture();status.setText("Status: connecting • page + URL capture starting");}});',
+                  'connect handler')
+          replace('        fetch.setOnClickListener(new View.OnClickListener(){public void onClick(View v){startLive();}});',
+                  '',
+                  'remove old crawler button handler', count=0) if '        fetch.setOnClickListener(new View.OnClickListener(){public void onClick(View v){startLive();}});' in s else None
+          # Reorder main screen: feed/connect controls first, then game iframe, then Live Analysis immediately below it.
+          replace('game.addView(browser,new LinearLayout.LayoutParams(-1,dp(300))); root.addView(game); root.addView(source);',
+                  'game.addView(browser,new LinearLayout.LayoutParams(-1,dp(300)));',
+                  'defer source and game layout insertion')
+          replace('root.addView(result);',
+                  'root.addView(source); root.addView(game); root.addView(result);',
+                  'iframe then live analysis layout')
+          # Track the prediction made before the next completed round, then compare it to the actual outcome.
+          replace('    String historyDiagnostic = "history row not detected yet";',
+                  '    String historyDiagnostic = "history row not detected yet";\n    double pendingCenter=0, pendingLow=0, pendingHigh=0; boolean pendingPrediction=false; int sessionEvaluated=0, sessionBandHits=0, sessionPointHits=0;',
+                  'session audit fields')
+          replace('    void refreshUi(){',
+                  '    void evaluatePendingRound(double actual){ if(!pendingPrediction)return; sessionEvaluated++; if(actual>=pendingLow && actual<=pendingHigh)sessionBandHits++; if(Math.abs(actual-pendingCenter)/Math.max(0.01,actual)<=0.15)sessionPointHits++; pendingPrediction=false; }\n\n    void refreshUi(){',
+                  'round outcome evaluator')
+          replace('final Analysis z=analyze(a); predictionReady=z.signal; if(z.signal){',
+                  'final Analysis z=analyze(a); predictionReady=z.signal; if(z.signal){ pendingCenter=z.center; pendingLow=z.lo; pendingHigh=z.hi; pendingPrediction=true;',
+                  'record next-round estimate')
+          replace('accuracy.setText(String.format(Locale.US,"Learning: %d rounds • backtest %.1f%%",a.size(),z.acc));',
+                  'accuracy.setText(String.format(Locale.US,"Session: %d rounds • backtest %.1f%% • live band hits %d/%d (%s)",a.size(),z.acc,sessionBandHits,sessionEvaluated,sessionEvaluated==0?"pending":String.format(Locale.US,"%.1f%%",100.0*sessionBandHits/sessionEvaluated)));',
+                  'show observed prediction band accuracy')
+          # Evaluate pending prediction before each accepted completed multiplier enters the learner.
+          replace('rounds.add(x);model.observe(x,rounds.size());',
+                  'evaluatePendingRound(x);rounds.add(x);model.observe(x,rounds.size());',
+                  'evaluate history/manual/crawler rounds', count=3)
+          replace('rounds.add(completed);model.observe(completed,rounds.size());',
+                  'evaluatePendingRound(completed);rounds.add(completed);model.observe(completed,rounds.size());',
+                  'evaluate changing live candidate')
+          replace('rounds.add(crawlerNewest); model.observe(crawlerNewest,rounds.size());',
+                  'evaluatePendingRound(crawlerNewest); rounds.add(crawlerNewest); model.observe(crawlerNewest,rounds.size());',
+                  'evaluate crawler round', count=0) if 'rounds.add(crawlerNewest); model.observe(crawlerNewest,rounds.size());' in s else None
+          # Session-only history should not be arbitrarily limited to the last 1000 observations.
+          s=s.replace('while(rounds.size()>1000)rounds.remove(0);','')
+          # Make the estimate explicitly about the next round and label confidence as model score, not probability.
+          replace('String.format(Locale.US,"ESTIMATE %.2fx   •   BAND %.2fx–%.2fx",z.center,z.lo,z.hi)',
+                  'String.format(Locale.US,"NEXT ROUND ESTIMATE %.2fx\\nRANGE %.2fx–%.2fx",z.center,z.lo,z.hi)',
+                  'next round estimate label')
+          replace('String.format(Locale.US,"Confidence %.0f/100 • model agreement %.0f%%",z.conf,z.agreement)',
+                  'String.format(Locale.US,"Model score %.0f/100 • agreement %.0f%% • not a win probability",z.conf,z.agreement)',
+                  'honest confidence wording')
+          p.write_text(s)
+          print("Updated source bytes:", len(s))
+          PY
+
       - name: Inspect Aviator UI and OCR source for requested updates
         shell: bash
         run: |
