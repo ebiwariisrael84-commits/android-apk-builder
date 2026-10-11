@@ -60,10 +60,10 @@ class MainActivity : AppCompatActivity() {
         page.addView(card().apply{
             setBackgroundColor(ink);addView(txt("TOTAL DEPOSITED",11,Color.LTGRAY,true));addView(txt(money(deposited),30,Color.WHITE,true,10));addView(txt("Recorded deposited amount",12,Color.rgb(208,225,216),false,4))
             addView(View(this@MainActivity).apply{setBackgroundColor(Color.rgb(73,89,103));layoutParams=LinearLayout.LayoutParams(-1,dp(1)).apply{topMargin=dp(18);bottomMargin=dp(12)}})
-            addView(rowMetric("Available balance",money(available)));addView(rowMetric("Capital invested",money(capital)));addView(rowMetric("Profits",money(profits)));addView(rowMetric("Withdrawals",money(withdrawals))
+            addView(rowMetric("Available balance",money(available)));addView(rowMetric("Capital invested",money(capital)));addView(rowMetric("Profits",money(profits)));addView(rowMetric("Withdrawals",money(withdrawals)))
         },mp(22))
         page.addView(txt("Quick actions",19,ink,true,24))
-        page.addView(LinearLayout(this).apply{orientation=0;addView(btn("Withdraw",true){withdraw()},LinearLayout.LayoutParams(0,dp(48),1f));addView(gap(10),LinearLayout.LayoutParams(dp(10),1));addView(btn("Investment plans",false){plans()},LinearLayout.LayoutParams(0,dp(48),1f)},mp(12))
+        page.addView(LinearLayout(this).apply{orientation=0;addView(btn("Withdraw",true){withdraw()},LinearLayout.LayoutParams(0,dp(48),1f));addView(gap(10),LinearLayout.LayoutParams(dp(10),1));addView(btn("Investment plans",false){plans()},LinearLayout.LayoutParams(0,dp(48),1f))},mp(12))
         page.addView(txt("S&P 500",19,ink,true,24))
         val market=card();market.addView(txt("S&P 500 index",16,ink,true));val status=txt(marketStatus,12,muted,false,4);market.addView(status)
         val chart=MarketLine(this);market.addView(chart,LinearLayout.LayoutParams(-1,dp(135)).apply{topMargin=dp(8)});val change=txt(marketChange,12,green,true,4);market.addView(change);page.addView(market,mp(12))
@@ -71,7 +71,7 @@ class MainActivity : AppCompatActivity() {
         page.addView(txt("Your investment",19,ink,true,24))
         page.addView(card().apply{val active=p.getString("active_plan",null);addView(txt(active?:"No active plan",17,ink,true));addView(txt(if(active==null)"Choose a plan to get started." else "Selected plan",13,muted,false,5));addView(btn(if(active==null)"Explore plans" else "View plans",false){plans()},mp(12))},mp(12))
         page.addView(txt("Account",19,ink,true,24))
-        page.addView(LinearLayout(this).apply{orientation=0;addView(btn("Transactions",false){transactions()},LinearLayout.LayoutParams(0,dp(46),1f));addView(gap(8),LinearLayout.LayoutParams(dp(8),1));addView(btn("Profile",false){profile()},LinearLayout.LayoutParams(0,dp(46),1f)},mp(12))
+        page.addView(LinearLayout(this).apply{orientation=0;addView(btn("Transactions",false){transactions()},LinearLayout.LayoutParams(0,dp(46),1f));addView(gap(8),LinearLayout.LayoutParams(dp(8),1));addView(btn("Profile",false){profile()},LinearLayout.LayoutParams(0,dp(46),1f))},mp(12))
         setContentView(scroll)
     }
     private data class Plan(val name:String,val min:Float,val tagline:String,val details:String)
@@ -108,7 +108,7 @@ class MainActivity : AppCompatActivity() {
         val(scroll,page)=root("Transactions","Recorded account activity")
         val a=try{org.json.JSONArray(p.getString("transactions","[]"))}catch(_:Exception){org.json.JSONArray()}
         if(a.length()==0)page.addView(card().apply{addView(txt("No transactions yet",16,ink,true));addView(txt("Activity will appear here.",13,muted,false,5))},mp(20))
-        else for(i in a.length()-1 downTo 0){val item=a.optJSONObject(i)?:continue;page.addView(card().apply{addView(txt(item.optString("type"),15,ink,true));addView(txt(item.optString("detail"),12,muted,false,4));addView(txt(money(item.optDouble("amount").toFloat()),16,green,true,8));addView(txt(item.optString("date"),11,muted,false,4)},mp(10))}
+        else for(i in a.length()-1 downTo 0){val item=a.optJSONObject(i)?:continue;page.addView(card().apply{addView(txt(item.optString("type"),15,ink,true));addView(txt(item.optString("detail"),12,muted,false,4));addView(txt(money(item.optDouble("amount").toFloat()),16,green,true,8));addView(txt(item.optString("date"),11,muted,false,4))},mp(10))}
         page.addView(btn("Back",false){dashboard()},mp(18));setContentView(scroll)
     }
     private fun profile(){
