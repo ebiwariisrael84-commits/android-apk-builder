@@ -375,6 +375,8 @@ class MainActivity : AppCompatActivity() {
                             val idPath = cloud.uploadKycImage(token, uid, "id", idBytes, contentResolver.getType(idUri) ?: "image/jpeg")
                             val facePath = cloud.uploadKycImage(token, uid, "face", faceBytes, contentResolver.getType(faceUri) ?: "image/jpeg")
                             cloud.submitKyc(token, uid, idType.selectedItem.toString(), idPath, facePath)
+                            // Use the KYC face photo as the user's avatar; it becomes visible after KYC approval unlocks the dashboard.
+                            cloud.updateAvatarPath(token, facePath)
                             runOnUiThread {
                                 selectedIdImageUri = null; selectedFaceImageUri = null
                                 kycApproved = false
@@ -460,32 +462,29 @@ class MainActivity : AppCompatActivity() {
         },mp(22))
         page.addView(txt("Quick actions",19,ink,true,24))
         page.addView(LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;addView(btn("Withdraw",true){withdraw()},LinearLayout.LayoutParams(0,dp(48),1f));addView(gap(10),LinearLayout.LayoutParams(dp(10),1));addView(btn("Investment plans",false){plans()},LinearLayout.LayoutParams(0,dp(48),1f))},mp(12))
-        page.addView(txt("Top 5 U.S. stocks",19,ink,true,24))
-        val market=card()
-        market.addView(txt("U.S. market watchlist",16,ink,true))
-        val status=txt("Loading latest available stock quotes…",12,muted,false,4);market.addView(status)
-        val stockRows=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
-        market.addView(stockRows,mp(8))
-        page.addView(market,mp(12))
-        loadTopStocks { message, quotes ->
-            status.text=message
-            stockRows.removeAllViews()
-            if(quotes.isEmpty()) stockRows.addView(txt("Stock quotes are temporarily unavailable. Pull down to try again.",12,muted,false,8))
-            quotes.forEach { q ->
-                stockRows.addView(LinearLayout(this).apply {
-                    orientation=LinearLayout.HORIZONTAL;gravity=android.view.Gravity.CENTER_VERTICAL
-                    setPadding(0,dp(10),0,dp(10))
-                    addView(LinearLayout(this@MainActivity).apply {
-                        orientation=LinearLayout.VERTICAL
-                        addView(txt(q.symbol,14,ink,true))
-                        addView(txt(q.name,11,muted,false,3))
-                    },LinearLayout.LayoutParams(0,-2,1f))
-                    addView(txt(money(q.price),14,ink,true))
-                    addView(txt(String.format(Locale.US,"%+.2f%%",q.changePct),12,if(q.changePct>=0)green else Color.rgb(190,65,65),true,0).apply { setPadding(dp(10),0,0,0) })
-                })
-                stockRows.addView(View(this@MainActivity).apply{setBackgroundColor(Color.rgb(235,239,237));layoutParams=LinearLayout.LayoutParams(-1,dp(1))})
-            }
+        page.addView(txt("Companies associated with Elon Musk",19,ink,true,24))
+        page.addView(txt("Explore company information and official links",13,muted,false,5))
+        page.addView(card().apply {
+            addView(txt("Important investment notice",15,ink,true))
+            addView(txt("Evercrest Capital is not affiliated with, endorsed by, or an official investment partner of Elon Musk or the companies below. These links are for information and to reach official company or investor-relations pages. They do not mean that money deposited in Evercrest is invested in these companies. Only invest through a verified, legally authorized broker or official offering. Publicly traded shares can lose value; private-company shares may not be available to the public.",12,muted,false,8))
+        },mp(12))
+        val muskCompanies = listOf(
+            Triple("Tesla, Inc.","Electric vehicles, energy storage and AI • NASDAQ: TSLA","https://ir.tesla.com/"),
+            Triple("SpaceX / Starlink","Space launch, satellite internet and Starlink services • SpaceX: NASDAQ: SPCX","https://ir.spacex.com/"),
+            Triple("xAI","Artificial intelligence and Grok • subsidiary of SpaceX; no separate public ticker","https://x.ai/"),
+            Triple("Neuralink","Brain-computer interface research • privately held; public shares are not generally available","https://neuralink.com/"),
+            Triple("The Boring Company","Tunnel and infrastructure technology • privately held","https://www.boringcompany.com/")
+        )
+        muskCompanies.forEach { company ->
+            page.addView(card().apply {
+                addView(txt(company.first,16,ink,true))
+                addView(txt(company.second,12,muted,false,6))
+                addView(btn("Open official website / investor information",false) {
+                    openExternalUrl(company.third)
+                },mp(10))
+            },mp(10))
         }
+        page.addView(txt("Company ownership, listing status and investment availability can change. Always verify current information directly with the company and your licensed broker.",11,muted,false,8))
         page.addView(txt("Your active investments",19,ink,true,24))
         val investmentContainer=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL}
         investmentContainer.addView(card().apply{addView(txt("Loading active investments from your cloud account…",13,muted,false))},mp(8))
@@ -690,7 +689,8 @@ class MainActivity : AppCompatActivity() {
                         val idPath=cloud.uploadKycImage(token,uid,"id",idBytes,contentResolver.getType(idUri)?: "image/jpeg")
                         val facePath=cloud.uploadKycImage(token,uid,"face",faceBytes,contentResolver.getType(faceUri)?: "image/jpeg")
                         cloud.submitKyc(token,uid,docType.selectedItem.toString(),idPath,facePath)
-                        runOnUiThread{toast("Identity documents submitted for administrator review.");selectedIdImageUri=null;selectedFaceImageUri=null;profile()}
+                        cloud.updateAvatarPath(token,facePath)
+                        runOnUiThread{toast("Identity documents submitted for administrator review. Your KYC face photo will be used as your profile photo after approval.");selectedIdImageUri=null;selectedFaceImageUri=null;profile()}
                     }catch(e:Exception){runOnUiThread{toast("Identity submission failed: "+(e.message ?: "Cloud error"))}}
                 }
             },mp(14))
@@ -1008,6 +1008,14 @@ class MainActivity : AppCompatActivity() {
         a.put(JSONObject().put("type",type).put("detail",detail).put("amount",value.toDouble()).put("date",java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",Locale.US).format(java.util.Date())))
         p.edit().putString("transactions",a.toString()).apply()
     }
+    private fun openExternalUrl(url: String) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (_: Exception) {
+            toast("Could not open the official website on this device.")
+        }
+    }
+
     private data class StockQuote(val symbol:String,val name:String,val price:Float,val changePct:Float)
     private fun loadTopStocks(done:(String,List<StockQuote>)->Unit){thread{
         val stocks=listOf("AAPL" to "Apple","MSFT" to "Microsoft","NVDA" to "NVIDIA","AMZN" to "Amazon","GOOGL" to "Alphabet")
