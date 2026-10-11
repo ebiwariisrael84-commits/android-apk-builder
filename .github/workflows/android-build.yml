@@ -118,7 +118,7 @@ jobs:
           s=s.replace('while(rounds.size()>1000)rounds.remove(0);','')
           # Make the estimate explicitly about the next round and label confidence as model score, not probability.
           replace('String.format(Locale.US,"ESTIMATE %.2fx   •   BAND %.2fx–%.2fx",z.center,z.lo,z.hi)',
-                  'String.format(Locale.US,"NEXT ROUND ESTIMATE %.2fx\\nRANGE %.2fx–%.2fx",z.center,z.lo,z.hi)',
+                  'String.format(Locale.US,"NEXT ROUND PREDICTION %.2fx\\nESTIMATED BAND %.2fx–%.2fx",z.center,z.lo,z.hi)',
                   'next round estimate label')
           replace('String.format(Locale.US,"Confidence %.0f/100 • model agreement %.0f%%",z.conf,z.agreement)',
                   'String.format(Locale.US,"Model score %.0f/100 • agreement %.0f%% • not a win probability",z.conf,z.agreement)',
