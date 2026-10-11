@@ -60,7 +60,7 @@ class MainActivity : AppCompatActivity() {
         page.addView(card().apply{
             setBackgroundColor(ink);addView(txt("TOTAL DEPOSITED",11,Color.LTGRAY,true));addView(txt(money(deposited),30,Color.WHITE,true,10));addView(txt("Recorded deposited amount",12,Color.rgb(208,225,216),false,4))
             addView(View(this@MainActivity).apply{setBackgroundColor(Color.rgb(73,89,103));layoutParams=LinearLayout.LayoutParams(-1,dp(1)).apply{topMargin=dp(18);bottomMargin=dp(12)}})
-            rowMetric("Available balance",money(available));rowMetric("Capital invested",money(capital));rowMetric("Profits",money(profits));rowMetric("Withdrawals",money(withdrawals))
+            addView(rowMetric("Available balance",money(available)));addView(rowMetric("Capital invested",money(capital)));addView(rowMetric("Profits",money(profits)));addView(rowMetric("Withdrawals",money(withdrawals))
         },mp(22))
         page.addView(txt("Quick actions",19,ink,true,24))
         page.addView(LinearLayout(this).apply{orientation=0;addView(btn("Withdraw",true){withdraw()},LinearLayout.LayoutParams(0,dp(48),1f));addView(gap(10),LinearLayout.LayoutParams(dp(10),1));addView(btn("Investment plans",false){plans()},LinearLayout.LayoutParams(0,dp(48),1f)},mp(12))
@@ -147,7 +147,7 @@ class MainActivity : AppCompatActivity() {
     private fun hash(v:String)=MessageDigest.getInstance("SHA-256").digest(v.toByteArray()).joinToString(""){"%02x".format(it)}
     private fun input(h:String,type:Int=InputType.TYPE_CLASS_TEXT)=EditText(this).apply{hint=h;textSize=15f;setSingleLine(true);inputType=type;setPadding(dp(14),dp(12),dp(14),dp(12));setBackgroundColor(Color.WHITE)}
     private fun card()=LinearLayout(this).apply{orientation=1;setPadding(dp(18),dp(18),dp(18),dp(18));setBackgroundColor(Color.WHITE);elevation=dp(2).toFloat()}
-    private fun rowMetric(label:String,value:String){addView(txt(label,13,Color.rgb(218,225,232),false),LinearLayout.LayoutParams(0,-2,1f));addView(txt(value,15,Color.WHITE,true));setPadding(0,dp(5),0,dp(5))}
+    private fun rowMetric(label:String,value:String)=LinearLayout(this).apply{orientation=0;gravity=android.view.Gravity.CENTER_VERTICAL;addView(txt(label,13,Color.rgb(218,225,232),false),LinearLayout.LayoutParams(0,-2,1f));addView(txt(value,15,Color.WHITE,true));setPadding(0,dp(5),0,dp(5))}
     private fun txt(s:String,size:Int,color:Int,bold:Boolean,top:Int=0)=TextView(this).apply{text=s;textSize=size.toFloat();setTextColor(color);if(bold)typeface=android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.BOLD);if(top>0)setPadding(0,dp(top),0,0)}
     private fun btn(label:String,primary:Boolean,click:()->Unit)=Button(this).apply{text=label;textSize=13f;isAllCaps=false;setTextColor(if(primary)Color.WHITE else green);backgroundTintList=android.content.res.ColorStateList.valueOf(if(primary)green else pale);setOnClickListener{click()}}
     private fun gap(w:Int)=View(this).apply{layoutParams=LinearLayout.LayoutParams(dp(w),1)}
