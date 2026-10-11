@@ -83,6 +83,7 @@ jobs:
           # Old controls are no longer present; remove their listeners to avoid dangling references.
           s = s.replace('reconnect.setOnClickListener(new View.OnClickListener(){public void onClick(View v){reconnectCapture();}});','')
           s = s.replace('fetch.setOnClickListener(new View.OnClickListener(){public void onClick(View v){startLive();}});','')
+          s = s.replace('fetch.setOnClickListener(new View.OnClickListener(){public void onClick(View v){fetchLive();}});','')
           # Reorder main screen: feed/connect controls first, then game iframe, then Live Analysis immediately below it.
           replace('game.addView(browser,new LinearLayout.LayoutParams(-1,dp(300))); root.addView(game); root.addView(source);',
                   'game.addView(browser,new LinearLayout.LayoutParams(-1,dp(300)));',
