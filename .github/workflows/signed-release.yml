@@ -13,12 +13,12 @@ jobs:
   release:
     runs-on: ubuntu-latest
     env:
-      SUPABASE_URL: ${ secrets.SUPABASE_URL }
-      SUPABASE_ANON_KEY: ${ secrets.SUPABASE_ANON_KEY }
-      RELEASE_KEYSTORE_BASE64: ${ secrets.RELEASE_KEYSTORE_BASE64 }
-      RELEASE_STORE_PASSWORD: ${ secrets.RELEASE_STORE_PASSWORD }
-      RELEASE_KEY_ALIAS: ${ secrets.RELEASE_KEY_ALIAS }
-      RELEASE_KEY_PASSWORD: ${ secrets.RELEASE_KEY_PASSWORD }
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+      RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+      RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+      RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
