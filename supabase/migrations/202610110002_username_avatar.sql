@@ -3,7 +3,7 @@ alter table public.profiles add column if not exists username text;
 alter table public.profiles add column if not exists avatar_image_path text;
 
 update public.profiles
-set username = coalesce(nullif(username, ''), nullif(split_part(email, '@', 1), ''), 'investor')
+set username = coalesce(nullif(username, ''), nullif(split_part(email, '@', 1), ''), 'investor') || '_' || left(id::text, 6)
 where username is null or username = '';
 
 create unique index if not exists profiles_username_lower_unique
