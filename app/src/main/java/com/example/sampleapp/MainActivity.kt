@@ -113,9 +113,24 @@ class MainActivity : AppCompatActivity() {
     }
     private fun profile(){
         val(scroll,page)=root("Your account","Personal details and settings")
-        page.addView(card().apply{addView(txt(p.getString("account_name","Investor")?:"Investor",19,ink,true));addView(txt(p.getString("account_email","")?:"",14,muted,false,5));addView(txt("Account data is stored locally on this device.",12,muted,false,14));addView(btn("Sign out",false){p.edit().putBoolean("logged",false).apply();auth(false)},mp(18))},mp(20))
+        page.addView(card().apply{addView(txt(p.getString("account_name","Investor")?:"Investor",19,ink,true));addView(txt(p.getString("account_email","")?:"",14,muted,false,5));addView(txt("Account data is stored locally on this device.",12,muted,false,14));addView(btn("Manage balances",false){manageBalances()},mp(12));addView(btn("Sign out",false){p.edit().putBoolean("logged",false).apply();auth(false)},mp(18))},mp(20))
         page.addView(btn("Back to dashboard",true){dashboard()},mp(14));setContentView(scroll)
     }
+    private fun manageBalances(){
+        val(scroll,page)=root("Balance management","Update the figures shown in this local account")
+        page.addView(card().apply{
+            val deposited=input("Total deposited in USD",InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL).apply{setText(amt("deposited").toString())}
+            val profits=input("Profits in USD",InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL).apply{setText(amt("profits").toString())}
+            addView(txt("Total deposited",13,muted,true));addView(deposited,mp(6))
+            addView(txt("Profits",13,muted,true,14));addView(profits,mp(6))
+            addView(btn("Save balances",true){
+                val d=deposited.text.toString().toFloatOrNull();val pr=profits.text.toString().toFloatOrNull()
+                when{d==null||pr==null||d<0||pr<0->toast("Enter valid non-negative amounts.");else->{p.edit().putFloat("deposited",d).putFloat("profits",pr).apply();addTx("Balance updated","Account balance figures",d);toast("Balances updated.");dashboard()}}
+            },mp(18))
+        },mp(20))
+        page.addView(btn("Cancel",false){profile()},mp(12));setContentView(scroll)
+    }
+
     private fun addTx(type:String,detail:String,value:Float){
         val a=try{org.json.JSONArray(p.getString("transactions","[]"))}catch(_:Exception){org.json.JSONArray()}
         a.put(JSONObject().put("type",type).put("detail",detail).put("amount",value.toDouble()).put("date",java.text.SimpleDateFormat("yyyy-MM-dd HH:mm",Locale.US).format(java.util.Date())))
