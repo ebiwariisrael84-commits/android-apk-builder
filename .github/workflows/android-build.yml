@@ -26,6 +26,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+          validate-wrappers: false
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
@@ -51,10 +52,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APK=/tmp/aviator-v25/build/outputs/apk/debug/$(find /tmp/aviator-v25/build/outputs/apk/debug -maxdepth 1 -name '*.apk' -printf '%f\n' | head -n 1)
+          APK="$(find /tmp/aviator-v25/build/outputs/apk/debug -maxdepth 1 -name '*.apk' -print -quit)"
+          test -n "$APK"
           test -f "$APK"
           ls -lh "$APK"
-          echo "APK_PATH=$APK" >> "$GITHUB_ENV"
 
       - name: Upload Aviator Predictor v25 APK
         uses: actions/upload-artifact@v4
