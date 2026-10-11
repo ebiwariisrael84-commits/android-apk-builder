@@ -168,7 +168,16 @@ class MainActivity : AppCompatActivity() {
                 val available=(amt("deposited")-amt("capital")-amt("withdrawals")).coerceAtLeast(0f)
                 when{p.getString("active_plan",null)==plan.name->toast(plan.name+" is your current plan.")
                     available<plan.min->toast("Available balance: "+money(available)+". "+plan.name+" requires "+money(plan.min)+". A connected funding service or administrator must update your balance.")
-                    else->{p.edit().putFloat("capital",amt("capital")+plan.min).putString("active_plan",plan.name).apply();addTx("Plan selected",plan.name,plan.min);dashboard()}
+                    else->{
+                        val token=cloudAccessToken ?: p.getString("cloud_access_token",null)
+                        if(token==null) toast("Please sign in to your cloud account first.")
+                        else thread {
+                            try {
+                                cloud.requestInvestment(token,plan.name.lowercase(Locale.ROOT),plan.min.toDouble())
+                                runOnUiThread { p.edit().putString("active_plan",plan.name).apply();toast("Investment request submitted for administrator review. No funds are moved until approval.");loadCloudWalletThenDashboard() }
+                            } catch(e:Exception) { runOnUiThread { toast("Investment request failed: "+(e.message ?: "Please try again.")) } }
+                        }
+                    }
                 }
             },mp(14))
         },mp(14))}
@@ -180,10 +189,19 @@ class MainActivity : AppCompatActivity() {
         page.addView(card().apply{
             addView(txt("Available balance",12,muted,true));addView(txt(money(available),25,ink,true,8))
             val value=input("Amount in USD",InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL);addView(value,mp(16))
-            addView(txt("Requests are saved locally; this build does not transfer money.",12,muted,false,8))
+            addView(txt("Requests are sent to the cloud for administrator review. Submission does not transfer money.",12,muted,false,8))
             addView(btn("Submit withdrawal request",true){
                 val v=value.text.toString().toFloatOrNull()
-                when{v==null||v<=0f->toast("Enter a valid amount.");v>available->toast("The amount exceeds your available balance.");else->{p.edit().putFloat("withdrawals",amt("withdrawals")+v).apply();addTx("Withdrawal request","Pending review",v);toast("Withdrawal request saved.");dashboard()}}
+                when{v==null||v<=0f->toast("Enter a valid amount.");v>available->toast("The amount exceeds your available balance.");else->{
+                    val token=cloudAccessToken ?: p.getString("cloud_access_token",null)
+                    if(token==null) toast("Please sign in to your cloud account first.")
+                    else thread {
+                        try {
+                            cloud.requestWithdrawal(token,v.toDouble())
+                            runOnUiThread { toast("Withdrawal request submitted for administrator review. No money has been transferred.");loadCloudWalletThenDashboard() }
+                        } catch(e:Exception) { runOnUiThread { toast("Withdrawal request failed: "+(e.message ?: "Please try again.")) } }
+                    }
+                }}
             },mp(16))
         },mp(22))
         page.addView(btn("Cancel",false){dashboard()},mp(12));setContentView(scroll)
