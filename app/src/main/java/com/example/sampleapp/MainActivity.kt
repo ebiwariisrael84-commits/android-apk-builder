@@ -207,27 +207,47 @@ class MainActivity : AppCompatActivity() {
     private data class Plan(val name:String,val icon:String,val min:Float,val tagline:String,val details:String)
     private val planList=listOf(Plan("Bronze","🥉",250f,"A simple starting tier","Portfolio overview and transaction tracking"),Plan("Silver","🥈",500f,"For growing portfolios","Portfolio tracking and plan history"),Plan("Gold","🥇",1000f,"For established investors","Expanded portfolio summaries"),Plan("Platinum","💎",5000f,"For larger portfolios","Full plan overview and account reporting"),Plan("Diamond","💠",10000f,"A premium investment tier","Enhanced portfolio reporting and history"),Plan("Elite","👑",25000f,"The highest membership tier","Premium account overview and reporting"))
     private fun plans(){
-        val(scroll,page)=root("Investment plans","Choose the tier that fits your goals")
-        planList.forEach{plan->page.addView(card().apply{
-            addView(txt(plan.icon+"  "+plan.name,21,ink,true));addView(txt(plan.tagline,13,green,true,4));addView(txt("Investment amount: "+money(plan.min),16,ink,true,14));addView(txt(plan.details,13,muted,false,5));addView(txt("Fixed configured rate: 60% once, not weekly or monthly. Profit is not guaranteed and must reflect verified performance.",11,muted,false,10))
-            addView(btn(if(p.getString("active_plan",null)==plan.name)"Current plan" else "Select "+plan.name,true){
-                val available=(amt("deposited")-amt("capital")-amt("withdrawals")).coerceAtLeast(0f)
-                when{p.getString("active_plan",null)==plan.name->toast(plan.name+" is your current plan.")
-                    available<plan.min->toast("Available balance: "+money(available)+". "+plan.name+" requires "+money(plan.min)+". A connected funding service or administrator must update your balance.")
-                    else->{
-                        val token=cloudAccessToken ?: p.getString("cloud_access_token",null)
-                        if(token==null) toast("Please sign in to your cloud account first.")
-                        else thread {
-                            try {
-                                cloud.requestInvestment(token,plan.name.lowercase(Locale.ROOT),plan.min.toDouble())
-                                runOnUiThread { p.edit().putString("active_plan",plan.name).apply();toast("Investment request submitted for administrator review. No funds are moved until approval.");loadCloudWalletThenDashboard() }
-                            } catch(e:Exception) { runOnUiThread { toast("Investment request failed: "+(e.message ?: "Please try again.")) } }
-                        }
+        val(scroll,page)=root("Investment plans","Choose from the currently active plans")
+        val token=cloudAccessToken ?: p.getString("cloud_access_token",null)
+        val loading=txt("Loading plans from your cloud account…",13,muted,false,12)
+        page.addView(loading)
+        page.addView(btn("Back to dashboard",false){dashboard()},mp(18))
+        setContentView(scroll)
+        if(token==null){loading.text="Please sign in to load plans.";return}
+        thread {
+            try {
+                val plans=cloud.fetchPlans(token)
+                runOnUiThread {
+                    loading.visibility=View.GONE
+                    if(plans.length()==0) page.addView(txt("No active plans are currently available.",13,muted,false,12))
+                    for(i in 0 until plans.length()) {
+                        val plan=plans.optJSONObject(i) ?: continue
+                        val name=plan.optString("name")
+                        val slug=plan.optString("slug")
+                        val minimum=plan.optDouble("minimum_amount",0.0).toFloat()
+                        val rate=plan.optDouble("fixed_profit_rate",0.0)
+                        page.addView(card().apply {
+                            addView(txt(plan.optString("icon")+"  "+name,21,ink,true))
+                            addView(txt("Minimum investment: "+money(minimum),16,ink,true,12))
+                            addView(txt("Configured rate: "+String.format(Locale.US,"%.2f",rate)+"% once; not weekly or monthly.",12,muted,false,6))
+                            addView(txt("Configured rates are not guaranteed returns. Requests are reviewed by the administrator; no money moves when you submit.",11,muted,false,8))
+                            addView(btn("Submit "+name+" request",true) {
+                                val available=(amt("deposited")-amt("capital")-amt("withdrawals")).coerceAtLeast(0f)
+                                if(available<minimum) toast("Available balance: "+money(available)+". "+name+" requires "+money(minimum)+".")
+                                else thread {
+                                    try {
+                                        cloud.requestInvestment(token,slug,minimum.toDouble())
+                                        runOnUiThread { toast(name+" investment request submitted for administrator review. No funds have been transferred.");loadCloudWalletThenDashboard() }
+                                    } catch(e:Exception) { runOnUiThread { toast("Investment request failed: "+(e.message ?: "Please try again.")) } }
+                                }
+                            },mp(12))
+                        },mp(14))
                     }
                 }
-            },mp(14))
-        },mp(14))}
-        page.addView(btn("Back to dashboard",false){dashboard()},mp(18));setContentView(scroll)
+            } catch(e:Exception) {
+                runOnUiThread { loading.text="Unable to load cloud plans: "+(e.message ?: "Check the database setup and try again.") }
+            }
+        }
     }
     private fun withdraw(){
         val(scroll,page)=root("Withdraw funds","Submit a withdrawal request")
