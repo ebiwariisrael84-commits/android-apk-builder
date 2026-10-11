@@ -507,7 +507,7 @@ class MainActivity : AppCompatActivity() {
         },mp(12))
         val muskCompanies = listOf(
             Triple("Tesla, Inc.","Electric vehicles, energy storage and AI • NASDAQ: TSLA","https://ir.tesla.com/"),
-            Triple("SpaceX / Starlink","Space launch, satellite internet and Starlink services • SpaceX: NASDAQ: SPCX","https://ir.spacex.com/"),
+            Triple("SpaceX / Starlink","Space launch, satellite internet and Starlink services • privately held","https://www.spacex.com/"),
             Triple("xAI","Artificial intelligence and Grok • subsidiary of SpaceX; no separate public ticker","https://x.ai/"),
             Triple("Neuralink","Brain-computer interface research • privately held; public shares are not generally available","https://neuralink.com/"),
             Triple("The Boring Company","Tunnel and infrastructure technology • privately held","https://www.boringcompany.com/")
