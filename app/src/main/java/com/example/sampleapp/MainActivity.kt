@@ -622,7 +622,19 @@ class MainActivity : AppCompatActivity() {
                             addView(txt("Investment type: "+planType.replace("-"," ").uppercase(Locale.US),12,muted,false,5))
                             addView(txt("Active amount: "+money(principal),15,ink,true,10))
                             addView(txt("Illustrative 60% profit estimate: "+money(projected),13,green,true,6))
-                            addView(txt("Estimate only; not a guaranteed return or a credited/withdrawable profit balance.",11,muted,false,5))
+                            addView(LinearLayout(this@MainActivity).apply {
+                                orientation = LinearLayout.HORIZONTAL
+                                gravity = android.view.Gravity.CENTER_VERTICAL
+                                setPadding(dp(10), dp(9), dp(10), dp(9))
+                                background = android.graphics.drawable.GradientDrawable().apply {
+                                    setColor(pale)
+                                    cornerRadius = dp(12).toFloat()
+                                    setStroke(dp(1), Color.rgb(211, 234, 222))
+                                }
+                                addView(txt("ⓘ", 13, green, true), LinearLayout.LayoutParams(dp(22), -2))
+                                addView(txt("Estimate only — returns are not guaranteed and are not credited to withdrawable profit.", 11, muted, false),
+                                    LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(5) })
+                            }, mp(8))
                         },mp(8))
                     }
                 }
@@ -725,8 +737,14 @@ class MainActivity : AppCompatActivity() {
                     for(i in 0 until rows.length()){
                         val item=rows.optJSONObject(i)?:continue
                         page.addView(card().apply{
-                            addView(txt(item.optString("transaction_type").replace('_',' ').replaceFirstChar{it.uppercase()},15,ink,true))
-                            addView(txt(item.optString("description"),12,muted,false,4))
+                            val rawType = item.optString("transaction_type").lowercase(Locale.ROOT)
+                            val displayType = when {
+                                rawType.contains("deposit") -> "Deposit"
+                                rawType.contains("withdraw") -> "Withdrawal"
+                                rawType.contains("invest") -> "Investment"
+                                else -> "Transaction"
+                            }
+                            addView(txt(displayType,15,ink,true))
                             addView(txt(money(item.optDouble("amount").toFloat()),16,green,true,8))
                             addView(txt("Status: "+item.optString("status"),12,muted,false,4))
                             addView(txt(item.optString("created_at"),11,muted,false,4))
