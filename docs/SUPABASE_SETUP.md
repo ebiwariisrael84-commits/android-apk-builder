@@ -1,56 +1,66 @@
 # MY INVEST — Supabase backend setup
 
-This project currently has a local-only Android account system. The Android client now contains Supabase Auth/REST calls with transient connection retries, cloud wallet and transaction reads, validated investment/withdrawal requests, profile updates, private KYC upload, and admin review calls. The live service still depends on running the SQL below in your Supabase project, creating the private storage bucket, and verifying the Actions secrets.
+This guide covers the live Supabase steps that cannot be performed by committing Android code alone. The Android client already contains cloud authentication, account/profile and wallet requests, investment and withdrawal request submission, private KYC upload, admin review, and transient connection retries.
 
-## 1. Create the Supabase project
-1. Open https://supabase.com/dashboard and sign in.
-2. Create a new project named `my-invest` (or another name you choose).
-3. Save the database password privately. Do not send it in chat or commit it to GitHub.
-4. In Project Settings → API (or Connect), copy the Project URL and the publishable/anon client key. These are client credentials; never use the `service_role` secret in the APK.
+## 1. Database schema
+1. Open the MY INVEST project at https://supabase.com/dashboard.
+2. Open SQL Editor.
+3. Open `supabase/schema.sql` in this repository, copy the entire latest file, paste it into a new SQL query, and run it.
+4. Confirm it finishes without errors. The latest schema includes the six plans, row-level security policies, validated request/review functions, admin balance/status functions, and the audited `admin_update_investment_plan` function.
+5. Open Storage and create a bucket named `kyc-documents` with **Public bucket disabled**. Confirm the bucket is private.
 
-## 2. Create database tables and policies
-1. Open SQL Editor in the Supabase dashboard.
-2. Open `supabase/schema.sql` in this repository and copy its entire contents.
-3. Paste it into a new SQL query and Run.
-4. Confirm the query completes without errors.
-5. The schema configures storage access policies. Create a bucket named `kyc-documents` in Storage and keep it PRIVATE (public access off) if it does not already exist.
+If you previously ran an earlier version, rerun the full latest schema. Review any SQL error instead of ignoring it.
 
-The schema creates six plans with a configured 60% rate and a `fixed_once` rule, plus validated request RPCs and audited administrator routines. This is configuration, not a guarantee of earnings. The app displays profit separately from deposited capital; do not credit profit unless supported by verified actual performance. If you already ran an earlier version of this schema, rerun the latest complete `supabase/schema.sql` so the new functions and policies are installed.
+## 2. Secure the owner administrator
+1. In Authentication → Users, create your owner login or sign up through the app.
+2. In SQL Editor, run the following statement after replacing the email with the exact owner email:
+   
+   ```sql
+   update public.profiles
+   set role = 'admin', account_status = 'approved', updated_at = now()
+   where id = (select id from auth.users where email = 'YOUR_ADMIN_EMAIL');
+   ```
 
-## 3. Create the one administrator account
-1. In Supabase Authentication → Users, create the owner account or use the normal app signup after client authentication is connected.
-2. Copy the exact email used by the owner.
-3. In SQL Editor, run the final admin-promotion statement at the bottom of `supabase/schema.sql`, replacing `YOUR_ADMIN_EMAIL` with that exact email.
-4. Verify exactly one profile row was updated. Do not promote investor accounts or expose a service-role secret.
-5. Configure Auth → URL Configuration and email settings for your app's password reset and approval notifications as needed.
+3. Verify exactly one row was updated. Do not expose a service-role key in the Android app, repository, or chat. Do not promote investor accounts.
+4. Sign in with that owner account and verify the administrator tools appear.
 
-Do not add admin registration to the public app. Admin status is assigned only by the project owner from the trusted dashboard.
+## 3. Android cloud credentials
+The repository's GitHub Actions workflow reads repository secrets `SUPABASE_URL` and `SUPABASE_ANON_KEY` and checks that both are present before building. Use only the project URL and publishable/anon client key. Never put the service-role secret in the APK.
 
-## 4. App connection credentials
-The Android client only uses the Project URL and publishable/anon key. The app uses authenticated Supabase sessions; the anon key alone does not grant admin access. The workflow now fails early if either Actions secret is missing or the URL is not a Supabase HTTPS project URL.
+## 4. Password recovery emails
+1. In Supabase Authentication → URL Configuration, add `myinvest://reset-password` to the allowed redirect URLs.
+2. Configure Authentication email settings. For dependable delivery, configure custom SMTP; Supabase's default sender is rate-limited and best-effort.
+3. In the app, use **Forgot password?**, open the reset email on the Android phone with MY INVEST installed, follow the link, and set a new password. This needs live verification because the redirect and email template depend on your Supabase project settings.
 
-Do not post database passwords, access tokens, service-role keys, or email-provider secrets in chat or source code. We will add the Android client integration after the project URL and publishable/anon key are available.
+## 5. Account status notification emails
+The repository includes `supabase/functions/admin-notify/index.ts`. It checks the caller's Supabase session and approved admin role before sending an account status email via Resend.
 
-## 5. Add build configuration to GitHub Actions
-After creating the Supabase project, open this repository on GitHub:
-1. Open Settings → Secrets and variables → Actions.
-2. Choose New repository secret.
-3. Add `SUPABASE_URL` with the Project URL.
-4. Add `SUPABASE_ANON_KEY` with the publishable/anon client key.
-5. Save each secret. Do not add a `service_role` key.
+To enable it:
+1. Create a Resend account and verify a sender domain/email.
+2. Deploy the function named `admin-notify` with JWT verification enabled. Use the Supabase CLI or the Edge Functions section of your project dashboard.
+3. In Edge Function Secrets, set `RESEND_API_KEY` and `FROM_EMAIL` (the verified sender address). Supabase supplies the project URL and legacy anon key to the function runtime.
+4. Test approval, rejection, resubmission-required and suspension notifications using a test account. A successful account status change does not prove the email was delivered.
 
-The Android Gradle configuration and build workflow now accept these values at build time. The runtime API integration is still a separate step; adding secrets alone does not connect sign-in or account data.
+## 6. Investment plan administration
+After the latest schema has run, the administrator tools include **Manage investment plans**. The owner can change each plan's name, minimum amount, configured rate and active status. Changes go through a server-side admin-only RPC and are written to the audit log. A configured rate is not a guarantee of profit.
 
-## Account notification emails
-- The app now requests password-reset emails through Supabase Auth and handles the `myinvest://reset-password` deep link to set a new password.
-- The repository includes `supabase/functions/admin-notify/index.ts`. Deploy it as the `admin-notify` Edge Function with JWT verification enabled.
-- Configure Edge Function secrets `RESEND_API_KEY` and `FROM_EMAIL`; verify the sender domain with Resend. The function checks the caller's live session and approved admin role before sending account-status emails.
-- Approval/rejection emails will not send until the function is deployed, Resend is configured, and the account's email settings are tested.
+## 7. Identity document storage
+The `kyc-documents` bucket must remain private. The schema defines row-level policies so an investor can access only their own objects and an approved administrator can review submissions. Admin document links are short-lived. Do not make the bucket public.
 
-## Current limitations
-- The schema must still be executed in your live Supabase project and the private `kyc-documents` bucket must exist.
-- Your administrator role must be assigned manually to the trusted owner account in the Supabase SQL Editor.
-- End-to-end login, password reset, email delivery, private document access, plan editing and cross-device behavior require live tests after setup.
-- Deposit collection and actual withdrawal payouts are intentionally not connected to a payment provider. Requests can be submitted and reviewed, but approval does not transfer money.e app records requests; an administrator-approved withdrawal still requires a real payment provider/manual payout and verified server-side reconciliation.
-- KYC images are uploaded to a private bucket and admin image links expire after five minutes. Create the `kyc-documents` bucket as private before testing.
-- The database schema must be executed, the owner must be manually promoted to admin, and login/KYC/permissions must be tested against the live Supabase project. A successful APK build alone does not prove the live backend works.
+## 8. Scope of payments
+As requested, there is **no payment provider integration**. Investors can submit investment and withdrawal requests, and an administrator can review them. Approving a withdrawal does not transfer money; no real deposit or payout processing occurs.
+
+## 9. Test checklist after setup
+- [ ] New account signup and email confirmation
+- [ ] Password-reset email opens the app and permits a password change
+- [ ] Pending account cannot use the investor dashboard before approval
+- [ ] Only the designated owner account can open administrator tools
+- [ ] ID and face images upload to private storage; another investor cannot access them
+- [ ] Admin can approve/reject KYC and investment requests
+- [ ] Admin can review withdrawal requests without a false claim that money was sent
+- [ ] Admin can change plan settings; a plan update is audit logged
+- [ ] Wallet, transactions and account state load consistently after signing in on another device
+- [ ] Connection retries and error messages work with network disabled and restored
+- [ ] Android navigation works on the target phone
+
+A successful APK build proves compilation and packaging only. The live database schema, private bucket, owner promotion, email settings, function deployment and on-device tests must all be verified separately.
