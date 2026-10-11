@@ -1,6 +1,6 @@
 # MY INVEST — Supabase backend setup
 
-This project currently has a local-only Android account system. The SQL migration establishes the backend schema and access rules, but the Android app is not connected until its public Supabase Project URL and publishable/anon key are configured and the client integration is implemented and tested.
+This project currently has a local-only Android account system. The Android client now contains Supabase Auth/REST calls with transient connection retries, cloud wallet and transaction reads, validated investment/withdrawal requests, profile updates, private KYC upload, and admin review calls. The live service still depends on running the SQL below in your Supabase project, creating the private storage bucket, and verifying the Actions secrets.
 
 ## 1. Create the Supabase project
 1. Open https://supabase.com/dashboard and sign in.
@@ -15,7 +15,7 @@ This project currently has a local-only Android account system. The SQL migratio
 4. Confirm the query completes without errors.
 5. Open Storage and create a bucket named `kyc-documents`; keep it PRIVATE (public access off).
 
-The schema creates six plans with a fixed configured rate of 60% and a `fixed_once` rule. This is configuration, not a guarantee of earnings. Profit should only be credited when supported by verified, actual performance.
+The schema creates six plans with a configured 60% rate and a `fixed_once` rule, plus validated request RPCs and audited administrator routines. This is configuration, not a guarantee of earnings. The app displays profit separately from deposited capital; do not credit profit unless supported by verified actual performance. If you already ran an earlier version of this schema, rerun the latest complete `supabase/schema.sql` so the new functions and policies are installed.
 
 ## 3. Create the one administrator account
 1. In Supabase Authentication → Users, create the owner account or use the normal app signup after client authentication is connected.
@@ -27,7 +27,7 @@ The schema creates six plans with a fixed configured rate of 60% and a `fixed_on
 Do not add admin registration to the public app. Admin status is assigned only by the project owner from the trusted dashboard.
 
 ## 4. App connection credentials
-The Android client should only use the Project URL and publishable/anon key. The database schema uses row-level security. The app must use authenticated Supabase sessions; the anon key alone does not grant admin access.
+The Android client only uses the Project URL and publishable/anon key. The app uses authenticated Supabase sessions; the anon key alone does not grant admin access. The workflow now fails early if either Actions secret is missing or the URL is not a Supabase HTTPS project URL.
 
 Do not post database passwords, access tokens, service-role keys, or email-provider secrets in chat or source code. We will add the Android client integration after the project URL and publishable/anon key are available.
 
@@ -44,7 +44,7 @@ The Android Gradle configuration and build workflow now accept these values at b
 ## Current limitations
 - The existing app still uses local SharedPreferences for sign-in, balances and transaction history.
 - This SQL file does not itself connect the APK to Supabase.
-- Approval emails require an email/Edge Function provider and must be tested.
-- Real deposits and withdrawals require a payment provider and verified server-side webhooks.
-- KYC documents must remain private and should be accessed only by the owner/admin through short-lived authorized access.
-- Build/test status must be checked after the Android client integration; do not treat a successful APK build alone as proof that the backend works.
+- Approval and KYC status emails are not configured; they require a verified email/Edge Function provider and end-to-end tests.
+- Deposit collection and actual withdrawal payouts are not connected to a payment provider. The app records requests; an administrator-approved withdrawal still requires a real payment provider/manual payout and verified server-side reconciliation.
+- KYC images are uploaded to a private bucket and admin image links expire after five minutes. Create the `kyc-documents` bucket as private before testing.
+- The database schema must be executed, the owner must be manually promoted to admin, and login/KYC/permissions must be tested against the live Supabase project. A successful APK build alone does not prove the live backend works.
