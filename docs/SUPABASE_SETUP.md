@@ -7,7 +7,7 @@ This guide covers the live Supabase steps that cannot be performed by committing
 2. Open SQL Editor.
 3. Open `supabase/schema.sql` in this repository, copy the entire latest file, paste it into a new SQL query, and run it.
 4. Confirm it finishes without errors. The latest schema includes the six plans, row-level security policies, validated request/review functions, admin balance/status functions, and the audited `admin_update_investment_plan` function.
-5. Open Storage and create a bucket named `kyc-documents` with **Public bucket disabled**. Confirm the bucket is private.
+5. Run `supabase/migrations/202610110001_private_kyc_bucket.sql` in the SQL Editor to create or enforce the private `kyc-documents` bucket. Confirm the bucket is private in Storage.
 
 If you previously ran an earlier version, rerun the full latest schema. Review any SQL error instead of ignoring it.
 
