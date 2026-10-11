@@ -215,11 +215,94 @@ class MainActivity : AppCompatActivity() {
     }
     private fun profile(){
         val(scroll,page)=root("Your account","Personal details and settings")
-        page.addView(card().apply{addView(txt(p.getString("account_name","Investor")?:"Investor",19,ink,true));addView(txt(p.getString("account_email","")?:"",14,muted,false,5));addView(txt("Account data is stored locally on this device.",12,muted,false,14));if(cloudRole=="admin") addView(txt("Administrator privileges are verified by the cloud profile.",12,green,true,8))
+        page.addView(card().apply{addView(txt(p.getString("account_name","Investor")?:"Investor",19,ink,true));addView(txt(p.getString("account_email","")?:"",14,muted,false,5));addView(txt("Account data is stored locally on this device.",12,muted,false,14));if(cloudRole=="admin") addView(btn("Administrator tools",true){adminDashboard()},mp(12))
             addView(btn("Refresh cloud account",false){loadCloudWalletThenDashboard()},mp(12))
             addView(btn("Sign out",false){val token=cloudAccessToken;p.edit().remove("cloud_access_token").remove("cloud_refresh_token").remove("cloud_user_id").putBoolean("logged",false).apply();cloudAccessToken=null;cloudRefreshToken=null;cloudUserId=null;thread{try{if(token!=null)cloud.signOut(token)}catch(_:Exception){}};auth(false)},mp(18))},mp(20))
         page.addView(btn("Back to dashboard",true){dashboard()},mp(14));setContentView(scroll)
     }
+    private fun adminDashboard(query:String=""){
+        if(cloudRole!="admin"){toast("Administrator access required.");return}
+        val(scroll,page)=root("Administrator tools","Cloud-managed accounts and audited balance adjustments")
+        val search=input("Search users by email",InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS).apply{setText(query)}
+        page.addView(card().apply{
+            addView(search)
+            addView(btn("Search users",true){adminDashboard(search.text.toString().trim())},mp(10))
+        },mp(16))
+        val token=cloudAccessToken ?: p.getString("cloud_access_token",null)
+        if(token==null){page.addView(txt("Please sign in again.",13,muted,false,12));setContentView(scroll);return}
+        val loading=txt("Loading cloud users…",13,muted,false,14);page.addView(loading)
+        setContentView(scroll)
+        thread{
+            try{
+                val users=cloud.searchUsers(token,query)
+                runOnUiThread{
+                    loading.text=if(users.length()==0)"No users found." else "Users ("+users.length()+")"
+                    for(i in 0 until users.length()){
+                        val user=users.optJSONObject(i)?:continue
+                        val id=user.optString("id")
+                        page.addView(card().apply{
+                            addView(txt(user.optString("full_name","Investor"),16,ink,true))
+                            addView(txt(user.optString("email"),12,muted,false,4))
+                            addView(txt("Role: "+user.optString("role")+" • Status: "+user.optString("account_status"),12,green,true,8))
+                            addView(btn("Approve account",false){
+                                changeUserStatus(id,"approved","Approved by administrator",query)
+                            },mp(8))
+                            addView(btn("Require resubmission",false){
+                                changeUserStatus(id,"resubmission_required","Please resubmit required information",query)
+                            },mp(6))
+                            addView(btn("Suspend account",false){
+                                changeUserStatus(id,"suspended","Suspended by administrator",query)
+                            },mp(6))
+                            addView(btn("Select for balance adjustment",true){
+                                adminBalanceEditor(id,user.optString("email"),query)
+                            },mp(8))
+                        },mp(10))
+                    }
+                }
+            }catch(e:Exception){runOnUiThread{loading.text="Unable to load users: "+(e.message ?: "Cloud error")}}
+        }
+        page.addView(btn("Back to profile",false){profile()},mp(18))
+    }
+    private fun changeUserStatus(userId:String,status:String,reason:String,query:String){
+        val token=cloudAccessToken ?: p.getString("cloud_access_token",null) ?: run{toast("Please sign in again.");return}
+        thread{
+            try{
+                cloud.adminSetProfileStatus(token,userId,status,reason)
+                runOnUiThread{toast("Account status updated.");adminDashboard(query)}
+            }catch(e:Exception){runOnUiThread{toast("Status update failed: "+(e.message ?: "Cloud error"))}}
+        }
+    }
+    private fun adminBalanceEditor(userId:String,email:String,query:String){
+        val(scroll,page)=root("Adjust account balance",email)
+        val field=Spinner(this).apply{
+            adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,
+                arrayOf("deposited_amount","capital_amount","profit_amount","withdrawals_amount"))
+        }
+        val amount=input("New amount in USD",InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL)
+        val reason=input("Reason for audit log")
+        page.addView(card().apply{
+            addView(txt("Balance field",13,muted,true));addView(field,mp(6))
+            addView(txt("New amount (USD)",13,muted,true,12));addView(amount,mp(6))
+            addView(txt("Reason (required)",13,muted,true,12));addView(reason,mp(6))
+            addView(btn("Save cloud balance",true){
+                val v=amount.text.toString().toDoubleOrNull()
+                val why=reason.text.toString().trim()
+                when{v==null||v<0->toast("Enter a valid non-negative amount.");why.length<4->toast("Enter a reason for the audit log.");else->{
+                    val token=cloudAccessToken ?: p.getString("cloud_access_token",null)
+                    if(token==null)toast("Please sign in again.")
+                    else thread{
+                        try{
+                            cloud.adminAdjustWallet(token,userId,field.selectedItem.toString(),v,why)
+                            runOnUiThread{toast("Cloud balance updated and audit logged.");adminDashboard(query)}
+                        }catch(e:Exception){runOnUiThread{toast("Balance update failed: "+(e.message ?: "Cloud error"))}}
+                    }
+                }}
+            },mp(16))
+        },mp(20))
+        page.addView(btn("Cancel",false){adminDashboard(query)},mp(12))
+        setContentView(scroll)
+    }
+
     private fun manageBalances(){
         val(scroll,page)=root("Balance management","Update the figures shown in this local account")
         page.addView(card().apply{
