@@ -138,6 +138,15 @@ class SupabaseClient(private val projectUrl: String, private val publishableKey:
             "/rest/v1/transactions?select=id,transaction_type,amount,status,description,created_at&user_id=eq.$userId&order=created_at.desc&limit=100",
             null, accessToken).body)
 
+    fun fetchPendingWithdrawals(accessToken: String): JSONArray =
+        JSONArray(request("GET", "/rest/v1/transactions?select=id,user_id,amount,description,status,created_at&transaction_type=eq.withdrawal_request&status=eq.pending&order=created_at.asc&limit=100", null, accessToken).body)
+
+    fun adminReviewWithdrawal(accessToken: String, transactionId: String, decision: String, reason: String) {
+        request("POST", "/rest/v1/rpc/admin_review_withdrawal",
+            JSONObject().put("p_transaction_id", transactionId).put("p_decision", decision)
+                .put("p_reason", reason).toString(), accessToken)
+    }
+
     fun fetchPendingKyc(accessToken: String): JSONArray =
         JSONArray(request("GET", "/rest/v1/kyc_submissions?select=id,user_id,document_type,id_image_path,face_image_path,status,created_at&status=eq.pending&order=created_at.asc&limit=100", null, accessToken).body)
 
