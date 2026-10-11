@@ -97,7 +97,7 @@ class MainActivity : AppCompatActivity() {
             if (isFinishing) return@runOnUiThread
             loadingGeneration++
             if (loadingDialog?.isShowing == true) loadingDialog?.setMessage(message)
-            else loadingDialog = ProgressDialog.show(this, "Everest Capital", message, true, false)
+            else loadingDialog = ProgressDialog.show(this, "Evercrest Capital", message, true, false)
         }
     }
 
@@ -155,14 +155,14 @@ class MainActivity : AppCompatActivity() {
         },android.widget.FrameLayout.LayoutParams(-1,-1))
         header.addView(logoFrame)
         val brand=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(10),0,0,0)}
-        brand.addView(txt("EVEREST CAPITAL",15,Color.WHITE,true))
+        brand.addView(txt("EVERCREST CAPITAL",15,Color.WHITE,true))
         brand.addView(txt("INVESTMENT ACCOUNT",9,Color.rgb(204,180,117),true,2))
         header.addView(brand,LinearLayout.LayoutParams(0,-2,1f))
-        val about=txt(if(title=="About Everest Capital")"HOME" else "ABOUT",11,Color.rgb(231,196,119),true)
+        val about=txt(if(title=="About Evercrest Capital")"HOME" else "ABOUT",11,Color.rgb(231,196,119),true)
         about.gravity=android.view.Gravity.CENTER
         about.setPadding(dp(10),dp(12),dp(4),dp(12))
         about.setOnClickListener{
-            if(title=="About Everest Capital"){
+            if(title=="About Evercrest Capital"){
                 if(p.getBoolean("logged",false)) dashboard() else auth(false)
             }else aboutPage()
         }
@@ -176,10 +176,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun aboutPage(){
-        val(screen,page)=root("About Everest Capital","Clarity, visibility, and account information in one place.")
+        val(screen,page)=root("About Evercrest Capital","Clarity, visibility, and account information in one place.")
         page.addView(card().apply{
             addView(txt("Our purpose",18,ink,true))
-            addView(txt("Everest Capital is an investment account interface designed to help account holders review their recorded balances, explore available investment plans, and track requests submitted for administrator review.",14,muted,false,10))
+            addView(txt("Evercrest Capital is an investment account interface designed to help account holders review their recorded balances, explore available investment plans, and track requests submitted for administrator review.",14,muted,false,10))
             addView(txt("What you can do",16,ink,true,18))
             addView(txt("View profit and account figures in US dollars, review available plan details, check transaction history, manage profile information, and submit investment or withdrawal requests where those features are enabled.",14,muted,false,8))
             addView(txt("Important investment information",16,ink,true,18))
@@ -187,13 +187,13 @@ class MainActivity : AppCompatActivity() {
             addView(txt("Account security",16,ink,true,18))
             addView(txt("Access to account balances depends on the configured cloud service and account permissions. Keep your sign-in details private and contact the app administrator if you notice activity you do not recognize.",13,muted,false,8))
         },mp(18))
-        page.addView(txt("© 2026 Everest Capital. All rights reserved.",11,muted,false,22))
-        page.addView(txt("Everest Capital is an app name and does not, by itself, imply regulatory authorization, deposit protection, or guaranteed investment performance.",11,muted,false,8))
+        page.addView(txt("© 2026 Evercrest Capital. All rights reserved.",11,muted,false,22))
+        page.addView(txt("Evercrest Capital is an app name and does not, by itself, imply regulatory authorization, deposit protection, or guaranteed investment performance.",11,muted,false,8))
         page.addView(btn("Back to dashboard",false){if(p.getBoolean("logged",false))dashboard() else auth(false)},mp(14))
         showPage(screen)
     }
     private fun auth(register:Boolean){
-        val(scroll,page)=root(if(register)"Create account" else "Welcome back",if(register)"Create your Everest Capital account" else "Sign in securely to your cloud account")
+        val(scroll,page)=root(if(register)"Create account" else "Welcome back",if(register)"Create your Evercrest Capital account" else "Sign in securely to your cloud account")
         val name=input("Full name").apply{visibility=if(register)View.VISIBLE else View.GONE}
         val email=input("Email address",InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS)
         val pass=input("Password",InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
@@ -266,7 +266,7 @@ class MainActivity : AppCompatActivity() {
         showPage(scroll)
     }
     private fun resetPasswordScreen(accessToken:String) {
-        val(scroll,page)=root("Set a new password","Choose a new password for your Everest Capital account")
+        val(scroll,page)=root("Set a new password","Choose a new password for your Evercrest Capital account")
         val password=input("New password",InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
         val confirm=input("Confirm new password",InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
         page.addView(card().apply {
