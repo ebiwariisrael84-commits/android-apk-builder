@@ -586,7 +586,12 @@ class MainActivity : AppCompatActivity() {
         thread{
             try{
                 cloud.adminSetProfileStatus(token,userId,status,reason)
-                runOnUiThread{toast("Account status updated.");adminDashboard(query)}
+                var emailWarning=false
+                try { cloud.notifyAccountStatus(token,userId,status,reason) } catch(_:Exception) { emailWarning=true }
+                runOnUiThread{
+                    toast(if(emailWarning) "Account status updated, but email notification is not configured or failed." else "Account status updated and notification sent.")
+                    adminDashboard(query)
+                }
             }catch(e:Exception){runOnUiThread{toast("Status update failed: "+(e.message ?: "Cloud error"))}}
         }
     }
