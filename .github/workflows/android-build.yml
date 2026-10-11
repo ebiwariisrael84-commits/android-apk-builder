@@ -42,6 +42,8 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/aviator-v25
           unzip -q AviatorPredictor_v25_HybridCapture_SportsUI_cloud_build_ready.zip -d /tmp/aviator-v25
+          # Fix source compile issue: shortErr must accept Throwable for catch(Throwable) blocks.
+          sed -i 's/String shortErr(Exception e)/String shortErr(Throwable e)/' /tmp/aviator-v25/src/com/aviator/live/MainActivity.java
           test -f /tmp/aviator-v25/settings.gradle
           test -f /tmp/aviator-v25/AndroidManifest.xml
           test -f /tmp/aviator-v25/src/com/aviator/live/MainActivity.java
