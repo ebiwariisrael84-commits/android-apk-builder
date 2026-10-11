@@ -400,7 +400,49 @@ class MainActivity : AppCompatActivity() {
                 }
             }catch(e:Exception){runOnUiThread{investmentStatus.text="Could not load investment requests: "+(e.message ?: "Cloud error")}}
         }
+        val kycHeading=txt("Pending identity verification",18,ink,true,24)
+        page.addView(kycHeading)
+        val kycStatus=txt("Loading identity submissions…",13,muted,false,8);page.addView(kycStatus)
+        thread{
+            try{
+                val submissions=cloud.fetchPendingKyc(token)
+                runOnUiThread{
+                    kycStatus.text=if(submissions.length()==0)"No pending identity submissions." else "Submissions ("+submissions.length()+")"
+                    for(i in 0 until submissions.length()){
+                        val item=submissions.optJSONObject(i)?:continue
+                        val sid=item.optString("id")
+                        val idPath=item.optString("id_image_path")
+                        val facePath=item.optString("face_image_path")
+                        page.addView(card().apply{
+                            addView(txt(item.optString("document_type")+" • Identity verification",15,ink,true))
+                            addView(txt("Investor ID: "+item.optString("user_id"),11,muted,false,4))
+                            addView(btn("View ID image (private link)",false){openKycDocument(idPath)},mp(8))
+                            addView(btn("View face photo (private link)",false){openKycDocument(facePath)},mp(6))
+                            addView(btn("Approve identity",true){reviewKyc(sid,"approved","Verified by administrator",query)},mp(8))
+                            addView(btn("Reject identity",false){reviewKyc(sid,"rejected","Identity documents rejected",query)},mp(6))
+                            addView(btn("Request resubmission",false){reviewKyc(sid,"resubmission_required","Please upload clearer identity images",query)},mp(6))
+                        },mp(10))
+                    }
+                }
+            }catch(e:Exception){runOnUiThread{kycStatus.text="Could not load identity submissions: "+(e.message ?: "Cloud error")}}
+        }
         page.addView(btn("Back to profile",false){profile()},mp(18))
+    }
+    private fun openKycDocument(path:String){
+        val token=cloudAccessToken ?: p.getString("cloud_access_token",null) ?: run{toast("Please sign in again.");return}
+        thread{
+            try{
+                val url=cloud.signedKycUrl(token,path)
+                runOnUiThread{try{startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(url)))}catch(_:Exception){toast("Could not open the private document.")}}
+            }catch(e:Exception){runOnUiThread{toast("Could not open document: "+(e.message ?: "Cloud error"))}}
+        }
+    }
+    private fun reviewKyc(id:String,status:String,reason:String,query:String){
+        val token=cloudAccessToken ?: p.getString("cloud_access_token",null) ?: run{toast("Please sign in again.");return}
+        thread{
+            try{cloud.reviewKyc(token,id,status,reason);runOnUiThread{toast("Identity submission marked "+status+".");adminDashboard(query)}}
+            catch(e:Exception){runOnUiThread{toast("KYC review failed: "+(e.message ?: "Cloud error"))}}
+        }
     }
     private fun reviewInvestment(id:String,decision:String,reason:String,query:String){
         val token=cloudAccessToken ?: p.getString("cloud_access_token",null) ?: run{toast("Please sign in again.");return}
