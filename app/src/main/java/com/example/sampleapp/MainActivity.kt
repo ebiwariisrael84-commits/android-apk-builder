@@ -42,6 +42,9 @@ class MainActivity : AppCompatActivity() {
     private var loadingGeneration: Int = 0
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
+        // The app uses its own branded navigation header. Hide the system action bar
+        // so the duplicate app-title strip never appears above the logo/header.
+        supportActionBar?.hide()
         window.statusBarColor=bg; window.navigationBarColor=Color.WHITE
         window.decorView.systemUiVisibility=View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
         // Require credentials whenever the app is launched into a fresh Activity.
@@ -153,8 +156,15 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(3),dp(3),dp(3),dp(3))
         },android.widget.FrameLayout.LayoutParams(-1,-1))
         header.addView(logoFrame)
+        // Keep the single brand lockup beside the icon; the system title bar is hidden.
+        header.addView(LinearLayout(this).apply {
+            orientation=LinearLayout.VERTICAL
+            setPadding(dp(11),0,0,0)
+            addView(txt("EVERCREST",15,Color.WHITE,true))
+            addView(txt("CAPITAL  •  INVESTMENT",9,Color.rgb(196,211,222),true,2))
+        }, LinearLayout.LayoutParams(0,-2,1f))
         val headerSpacer=View(this)
-        header.addView(headerSpacer,LinearLayout.LayoutParams(0,1,1f))
+        header.addView(headerSpacer,LinearLayout.LayoutParams(0,1,0f))
         val nav=TextView(this).apply{
             text="☰"; textSize=25f; gravity=android.view.Gravity.CENTER
             setTextColor(Color.WHITE); contentDescription="Open navigation menu"
@@ -206,11 +216,32 @@ class MainActivity : AppCompatActivity() {
         showPage(screen)
     }
     private fun auth(register:Boolean){
-        val(scroll,page)=root(if(register)"Create account" else "Welcome back",if(register)"Create your Evercrest Capital account" else "Sign in securely to your cloud account")
+        val(scroll,page)=root(if(register)"Create account" else "Welcome back",null,false)
+        // Modern authentication hero: no duplicate app title above the logo, with a clear
+        // hierarchy, premium navy/emerald treatment, and generous mobile spacing.
+        page.addView(LinearLayout(this).apply {
+            orientation=LinearLayout.VERTICAL
+            setPadding(dp(22),dp(24),dp(22),dp(24))
+            background=android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(Color.rgb(9,22,42),Color.rgb(18,52,75),Color.rgb(17,91,78))).apply {
+                cornerRadius=dp(26).toFloat(); setStroke(dp(1),Color.rgb(48,103,111))
+            }
+            addView(txt(if(register)"PRIVATE INVESTOR PORTAL" else "SECURE INVESTOR PORTAL",10,Color.rgb(177,221,212),true))
+            addView(txt(if(register)"Create your account" else "Welcome back",29,Color.WHITE,true,dp(12)))
+            addView(txt(if(register)"Set up your profile to access your investment dashboard." else "Sign in to view your portfolio, profit and account activity.",14,Color.rgb(211,226,230),false,dp(8)))
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation=LinearLayout.HORIZONTAL; gravity=android.view.Gravity.CENTER_VERTICAL
+                addView(txt("●  Secure access",10,Color.rgb(219,239,229),true),LinearLayout.LayoutParams(0,-2,1f))
+                addView(txt("USD ACCOUNT",9,Color.rgb(235,204,129),true).apply {
+                    background=android.graphics.drawable.GradientDrawable().apply { setColor(Color.argb(35,255,255,255));cornerRadius=dp(18).toFloat() }
+                    setPadding(dp(10),dp(6),dp(10),dp(6))
+                })
+            }, mp(18))
+        },mp(4))
         val username=input("Username").apply{visibility=if(register)View.VISIBLE else View.GONE}
         val email=input("Email address",InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS)
         val pass=input("Password",InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
-        page.addView(txt("Your money, clearly in view",15,green,true,10))
+        page.addView(txt(if(register)"ACCOUNT DETAILS" else "SIGN IN TO CONTINUE",11,muted,true,dp(24)))
         page.addView(card().apply{
             addView(username);addView(email,mp(12));addView(pass,mp(12))
             addView(btn(if(register)"Create account" else "Sign in",true){
@@ -275,8 +306,8 @@ class MainActivity : AppCompatActivity() {
                 }
             },mp(8))
             addView(btn(if(register)"Already registered? Sign in" else "Create a new account",false){auth(!register)},mp(8))
-        },mp(24))
-        page.addView(txt("Accounts and balances require the configured Supabase cloud service. New accounts need administrator approval.",12,muted,false,18))
+        },mp(16))
+        page.addView(txt("Your account is protected by email/password sign-in. Accounts and balances require the configured cloud service, and new accounts need administrator approval.",12,muted,false,18))
         showPage(scroll)
     }
     private fun resetPasswordScreen(accessToken:String) {
@@ -1159,11 +1190,32 @@ class MainActivity : AppCompatActivity() {
     private fun amt(key:String)=p.getFloat(key,0f)
     private fun money(v:Float)="$"+String.format(Locale.US,"%,.2f",v)
     private fun hash(v:String)=MessageDigest.getInstance("SHA-256").digest(v.toByteArray()).joinToString(""){"%02x".format(it)}
-    private fun input(h:String,type:Int=InputType.TYPE_CLASS_TEXT)=EditText(this).apply{hint=h;textSize=15f;setSingleLine(true);inputType=type;setPadding(dp(14),dp(12),dp(14),dp(12));background=android.graphics.drawable.GradientDrawable().apply{setColor(Color.WHITE);cornerRadius=dp(12).toFloat();setStroke(dp(1),Color.rgb(224,231,228))}}
-    private fun card()=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(18),dp(18),dp(18),dp(18));background=android.graphics.drawable.GradientDrawable().apply{setColor(Color.WHITE);cornerRadius=dp(18).toFloat();setStroke(dp(1),Color.rgb(235,239,237))};elevation=dp(2).toFloat()}
+    private fun input(h:String,type:Int=InputType.TYPE_CLASS_TEXT)=EditText(this).apply{
+        hint=h;textSize=15f;setSingleLine(true);inputType=type
+        setTextColor(ink);setHintTextColor(Color.rgb(137,149,161));minHeight=dp(52)
+        setPadding(dp(16),dp(13),dp(16),dp(13))
+        background=android.graphics.drawable.GradientDrawable().apply{setColor(Color.rgb(250,252,253));cornerRadius=dp(15).toFloat();setStroke(dp(1),Color.rgb(218,227,232))}
+    }
+    private fun card()=LinearLayout(this).apply{
+        orientation=LinearLayout.VERTICAL;setPadding(dp(18),dp(18),dp(18),dp(18))
+        background=android.graphics.drawable.GradientDrawable().apply{setColor(Color.WHITE);cornerRadius=dp(20).toFloat();setStroke(dp(1),Color.rgb(229,235,239))}
+        elevation=dp(3).toFloat()
+    }
     private fun rowMetric(label:String,value:String)=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=android.view.Gravity.CENTER_VERTICAL;addView(txt(label,13,Color.rgb(218,225,232),false),LinearLayout.LayoutParams(0,-2,1f));addView(txt(value,15,Color.WHITE,true));setPadding(0,dp(5),0,dp(5))}
     private fun txt(s:String,size:Int,color:Int,bold:Boolean,top:Int=0)=TextView(this).apply{text=s;textSize=size.toFloat();setTextColor(color);if(bold)typeface=android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.BOLD);if(top>0)setPadding(0,dp(top),0,0)}
-    private fun btn(label:String,primary:Boolean,click:()->Unit)=Button(this).apply{text=label;textSize=13f;isAllCaps=false;setTextColor(if(primary)Color.WHITE else green);backgroundTintList=android.content.res.ColorStateList.valueOf(if(primary)green else pale);setOnClickListener{click()}}
+    private fun btn(label:String,primary:Boolean,click:()->Unit)=Button(this).apply{
+        text=label;textSize=14f;isAllCaps=false;minHeight=dp(46)
+        typeface=android.graphics.Typeface.create("sans-serif-medium",android.graphics.Typeface.NORMAL)
+        setTextColor(if(primary)Color.WHITE else Color.rgb(15,111,82))
+        backgroundTintList=null
+        background=android.graphics.drawable.GradientDrawable().apply{
+            setColor(if(primary)Color.rgb(15,130,88) else Color.rgb(239,248,243))
+            cornerRadius=dp(15).toFloat()
+            if(!primary)setStroke(dp(1),Color.rgb(205,231,218))
+        }
+        setPadding(dp(16),dp(10),dp(16),dp(10))
+        setOnClickListener{click()}
+    }
     private fun gap(w:Int)=View(this).apply{layoutParams=LinearLayout.LayoutParams(dp(w),1)}
     private fun mp(top:Int)=LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(top)}
     private fun dp(v:Int)=(v*resources.displayMetrics.density).toInt()
