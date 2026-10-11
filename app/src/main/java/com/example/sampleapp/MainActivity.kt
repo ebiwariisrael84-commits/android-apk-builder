@@ -74,12 +74,12 @@ class MainActivity : AppCompatActivity() {
         page.addView(LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;addView(btn("Transactions",false){transactions()},LinearLayout.LayoutParams(0,dp(46),1f));addView(gap(8),LinearLayout.LayoutParams(dp(8),1));addView(btn("Profile",false){profile()},LinearLayout.LayoutParams(0,dp(46),1f))},mp(12))
         setContentView(scroll)
     }
-    private data class Plan(val name:String,val min:Float,val tagline:String,val details:String)
-    private val planList=listOf(Plan("Bronze",50f,"A simple starting tier","Basic portfolio and transaction tracking"),Plan("Silver",250f,"For growing portfolios","Portfolio tracking and plan history"),Plan("Gold",1000f,"For established investors","Expanded portfolio summaries"),Plan("Platinum",5000f,"For larger portfolios","Full plan overview and account reporting"))
+    private data class Plan(val name:String,val icon:String,val min:Float,val tagline:String,val details:String)
+    private val planList=listOf(Plan("Bronze","🥉",250f,"A simple starting tier","Portfolio overview and transaction tracking"),Plan("Silver","🥈",500f,"For growing portfolios","Portfolio tracking and plan history"),Plan("Gold","🥇",1000f,"For established investors","Expanded portfolio summaries"),Plan("Platinum","💎",5000f,"For larger portfolios","Full plan overview and account reporting"),Plan("Diamond","💠",10000f,"A premium investment tier","Enhanced portfolio reporting and history"),Plan("Elite","👑",25000f,"The highest membership tier","Premium account overview and reporting"))
     private fun plans(){
         val(scroll,page)=root("Investment plans","Choose the tier that fits your goals")
         planList.forEach{plan->page.addView(card().apply{
-            addView(txt(plan.name,20,ink,true));addView(txt(plan.tagline,13,green,true,4));addView(txt("Minimum capital: "+money(plan.min),15,ink,true,14));addView(txt(plan.details,13,muted,false,5))
+            addView(txt(plan.icon+"  "+plan.name,21,ink,true));addView(txt(plan.tagline,13,green,true,4));addView(txt("Investment amount: "+money(plan.min),16,ink,true,14));addView(txt(plan.details,13,muted,false,5));addView(txt("Weekly returns are subject to verified performance and the app’s configured profit rules.",11,muted,false,10))
             addView(btn(if(p.getString("active_plan",null)==plan.name)"Current plan" else "Select "+plan.name,true){
                 val available=(amt("deposited")-amt("capital")-amt("withdrawals")).coerceAtLeast(0f)
                 when{p.getString("active_plan",null)==plan.name->toast(plan.name+" is your current plan.")
