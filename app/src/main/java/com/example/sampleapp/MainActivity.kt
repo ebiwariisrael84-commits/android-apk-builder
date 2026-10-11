@@ -572,7 +572,7 @@ class MainActivity : AppCompatActivity() {
         page.addView(txt("Explore company information and official links",13,muted,false,5))
         page.addView(card().apply {
             addView(txt("Important investment notice",15,ink,true))
-            addView(txt("Evercrest Capital allocates deposits and investment contributions through its offline office operations toward acquiring shares or other eligible investment interests associated with these five Elon Musk-related companies. Evercrest Capital is not shown here as affiliated with or endorsed by Elon Musk or the featured companies. Tesla is publicly traded; the other featured businesses may be private or have limited investment eligibility. Investments can lose value.",12,muted,false,8))
+            addView(txt("Evercrest Capital allocates deposits and investment contributions through its offline office operations toward acquiring shares or other eligible investment interests associated with these five Elon Musk-related companies.",12,muted,false,8))
         },mp(12))
         val muskCompanies = listOf(
             Triple("Tesla, Inc.","Electric vehicles, energy storage and AI • NASDAQ: TSLA","https://ir.tesla.com/"),
