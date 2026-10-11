@@ -1,4 +1,4 @@
-name: Build Aviator Predictor v27 APK
+name: Build Aviator Predictor v28 Startup Crash Fix APK
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  build-aviator-v27:
+  build-aviator-v28:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -168,6 +168,21 @@ jobs:
           refresh_end = s.index("    void startUiWatchdog(){", refresh_start)
           new_refresh = r'''    void refreshUi(){
               ArrayList<Double>a; synchronized(lock){a=new ArrayList<Double>(rounds);}
+              if(a.isEmpty()){
+                  predictionReady=true;
+                  latest.setText("PREDICTED VALUE 1.50x");
+                  prediction.setText("ESTIMATED BAND 1.01x–2.00x");
+                  confidence.setText("Diagnostic confidence 0/100 • no completed history yet");
+                  intelligence.setText("Baseline only • collect completed rounds to personalize estimate");
+                  audit.setText("Prediction state: visible fallback band; not a guaranteed outcome");
+                  accuracy.setText("Session: 0 completed rounds • backtest unavailable");
+                  dashboard.setText("Baseline center 1.50x • band width 0.99x • regime unknown");
+                  anomaly.setText("Analysis: insufficient history • agreement unavailable");
+                  if(chart!=null)chart.setData(a);
+                  if(sessionHealth!=null)sessionHealth.setText("Source health: waiting for completed history");
+                  updateAdvancedInsights();
+                  return;
+              }
               Analysis z=analyze(a);
               boolean lowData=a.size()<5;
               boolean modelQualified=z.signal && !lowData;
@@ -221,13 +236,13 @@ jobs:
           s = s.replace('historyDiagnostic="history row active • "+added+" new round(s) recorded • "+current.size()+" values visible";saveRounds();}',
                         'historyDiagnostic="history row active • "+added+" new round(s) recorded • "+current.size()+" values visible";saveRounds();mainHandler.post(new Runnable(){public void run(){refreshUi();}});}')
           # Bump to v27 so Android treats this as a new install/update.
-          s = s.replace('android:versionCode="26" android:versionName="26.0-History-First-Session-Learning"',
-                        'android:versionCode="27" android:versionName="27.0-Prediction-Always-Visible"')
+          s = s.replace('android:versionCode="28" android:versionName="28.0-Startup-Crash-Fix"',
+                        'android:versionCode="28" android:versionName="28.0-Startup-Crash-Fix"')
           p.write_text(s)
           manifest = Path("/tmp/aviator-v25/AndroidManifest.xml")
           m = manifest.read_text()
-          m = m.replace('android:versionCode="25" android:versionName="25.0-Hybrid-Capture-Sports-UI"',
-                        'android:versionCode="27" android:versionName="27.0-Prediction-Always-Visible"')
+          m = m.replace('android:versionCode="28" android:versionName="28.0-Startup-Crash-Fix"',
+                        'android:versionCode="28" android:versionName="28.0-Startup-Crash-Fix"')
           manifest.write_text(m)
           print("Updated source bytes:", len(s))
           print("Set Android version to v27")
@@ -271,10 +286,31 @@ jobs:
           test -f "$APK"
           ls -lh "$APK"
 
-      - name: Upload Aviator Predictor v27 APK
+      - name: Launch APK in Android emulator (startup smoke test)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          script: |
+            set -euo pipefail
+            APK="$(find /tmp/aviator-v25/build/outputs/apk/debug -maxdepth 1 -name '*.apk' -print -quit)"
+            adb install "$APK"
+            adb shell am force-stop com.aviator.live
+            adb shell monkey -p com.aviator.live 1
+            sleep 12
+            adb logcat -d -s AndroidRuntime:E | tee /tmp/aviator-startup-log.txt
+            if grep -q "FATAL EXCEPTION" /tmp/aviator-startup-log.txt; then
+              echo "Startup crash detected in emulator"
+              exit 1
+            fi
+            adb shell pidof com.aviator.live
+
+      - name: Upload Aviator Predictor v28 APK
         uses: actions/upload-artifact@v4
         with:
-          name: Aviator-Predictor-v27-debug-APK
+          name: Aviator-Predictor-v28-debug-APK
           path: /tmp/aviator-v25/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
@@ -283,7 +319,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Aviator-Predictor-v27-build-reports
+          name: Aviator-Predictor-v28-build-reports
           path: /tmp/aviator-v25/build/reports/**
           if-no-files-found: ignore
           retention-days: 7
