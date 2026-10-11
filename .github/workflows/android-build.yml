@@ -80,9 +80,9 @@ jobs:
           replace('open.setOnClickListener(new View.OnClickListener(){public void onClick(View v){openBrowser(endpoint.getText().toString().trim());}});',
                   'connect.setOnClickListener(new View.OnClickListener(){public void onClick(View v){String url=endpoint.getText().toString().trim();openBrowser(url);startLive();reconnectCapture();status.setText("Status: connecting • page + URL capture starting");}});',
                   'connect handler')
-          replace('        fetch.setOnClickListener(new View.OnClickListener(){public void onClick(View v){startLive();}});',
-                  '',
-                  'remove old crawler button handler', count=0) if '        fetch.setOnClickListener(new View.OnClickListener(){public void onClick(View v){startLive();}});' in s else None
+          # Old controls are no longer present; remove their listeners to avoid dangling references.
+          s = s.replace('reconnect.setOnClickListener(new View.OnClickListener(){public void onClick(View v){reconnectCapture();}});','')
+          s = s.replace('fetch.setOnClickListener(new View.OnClickListener(){public void onClick(View v){startLive();}});','')
           # Reorder main screen: feed/connect controls first, then game iframe, then Live Analysis immediately below it.
           replace('game.addView(browser,new LinearLayout.LayoutParams(-1,dp(300))); root.addView(game); root.addView(source);',
                   'game.addView(browser,new LinearLayout.LayoutParams(-1,dp(300)));',
@@ -106,13 +106,13 @@ jobs:
           # Evaluate pending prediction before each accepted completed multiplier enters the learner.
           replace('rounds.add(x);model.observe(x,rounds.size());',
                   'evaluatePendingRound(x);rounds.add(x);model.observe(x,rounds.size());',
-                  'evaluate history/manual/crawler rounds', count=3)
+                  'evaluate history/manual/crawler rounds', count=2)
           replace('rounds.add(completed);model.observe(completed,rounds.size());',
                   'evaluatePendingRound(completed);rounds.add(completed);model.observe(completed,rounds.size());',
                   'evaluate changing live candidate')
           replace('rounds.add(crawlerNewest); model.observe(crawlerNewest,rounds.size());',
                   'evaluatePendingRound(crawlerNewest); rounds.add(crawlerNewest); model.observe(crawlerNewest,rounds.size());',
-                  'evaluate crawler round', count=0) if 'rounds.add(crawlerNewest); model.observe(crawlerNewest,rounds.size());' in s else None
+                  'evaluate crawler round', count=1)
           # Session-only history should not be arbitrarily limited to the last 1000 observations.
           s=s.replace('while(rounds.size()>1000)rounds.remove(0);','')
           # Make the estimate explicitly about the next round and label confidence as model score, not probability.
