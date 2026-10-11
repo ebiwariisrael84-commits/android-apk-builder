@@ -10,6 +10,7 @@ import android.net.Uri
 import android.text.InputType
 import android.view.View
 import android.widget.*
+import android.app.ProgressDialog
 import androidx.appcompat.app.AppCompatActivity
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -30,12 +31,16 @@ class MainActivity : AppCompatActivity() {
     private val ink=Color.rgb(26,39,55); private val muted=Color.rgb(111,124,139)
     private val green=Color.rgb(15,130,88); private val pale=Color.rgb(235,246,240); private val bg=Color.rgb(247,249,248)
     private var marketValues=floatArrayOf(); private var marketStatus="Loading market data…"; private var marketChange=""
+    private val navigationStack = java.util.ArrayDeque<View>()
+    private var activePage: View? = null
+    private var loadingDialog: ProgressDialog? = null
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor=bg; window.navigationBarColor=Color.WHITE
         window.decorView.systemUiVisibility=View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
         auth(false)
         val incoming=intent?.data
+        if(incoming?.scheme=="myinvest" && incoming.host=="oauth-callback") { handleOAuthCallback(incoming); return }
         if(incoming?.scheme=="myinvest" && incoming.host=="confirm-email") {
             val params=(incoming.query.orEmpty()+"&"+incoming.fragment.orEmpty()).split("&").mapNotNull { part ->
                 val pieces=part.split("=", limit=2)
@@ -68,11 +73,86 @@ class MainActivity : AppCompatActivity() {
             } catch (_:Exception) { runOnUiThread { p.edit().putBoolean("logged",false).apply(); auth(false); toast("Could not reconnect to your cloud account. Check internet and sign in again to retry.") } }
         }
     }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val incoming = intent.data
+        if (incoming?.scheme == "myinvest" && incoming.host == "oauth-callback") handleOAuthCallback(incoming)
+    }
+
+    override fun onBackPressed() {
+        if (!navigationStack.isEmpty()) {
+            val previous = navigationStack.removeLast()
+            activePage = previous
+            setContentView(previous)
+        } else super.onBackPressed()
+    }
+
+    private fun showPage(view: View, root: Boolean = false) {
+        if (root) navigationStack.clear()
+        else activePage?.let { previous -> if (previous !== view) navigationStack.addLast(previous) }
+        activePage = view
+        setContentView(view)
+    }
+
+    private fun showLoading(message: String) {
+        runOnUiThread {
+            if (isFinishing) return@runOnUiThread
+            if (loadingDialog?.isShowing == true) loadingDialog?.setMessage(message)
+            else loadingDialog = ProgressDialog.show(this, "MY INVEST", message, true, false)
+        }
+    }
+
+    private fun hideLoading() {
+        runOnUiThread { loadingDialog?.dismiss(); loadingDialog = null }
+    }
+
+    private fun handleOAuthCallback(uri: Uri) {
+        val params = uri.fragment.orEmpty().split("&").mapNotNull { part ->
+            val pieces = part.split("=", limit = 2)
+            if (pieces.size == 2) pieces[0] to Uri.decode(pieces[1].replace("+", "%2B")) else null
+        }.toMap()
+        val error = params["error_description"] ?: params["error"]
+        val access = params["access_token"]
+        val refresh = params["refresh_token"]
+        if (!error.isNullOrBlank()) { auth(false); toast("Google sign-in failed: " + error.replace("+", " ")); return }
+        if (access.isNullOrBlank()) { auth(false); toast("Google sign-in did not return a session. Please try again."); return }
+        showLoading("Securing your Google sign-in…")
+        thread {
+            try {
+                val user = cloud.fetchCurrentUser(access)
+                val session = SupabaseClient.Session(access, refresh.orEmpty(), user.optString("id"), user.optString("email"))
+                val profile = cloud.fetchProfile(session.accessToken, session.userId)
+                runOnUiThread {
+                    hideLoading()
+                    if (profile.optString("account_status") != "approved") {
+                        auth(false)
+                        toast("Your account is " + profile.optString("account_status", "pending") + ". Dashboard access requires administrator approval.")
+                    } else {
+                        saveSession(session)
+                        cloudRole = profile.optString("role", "investor")
+                        p.edit().putString("account_name", profile.optString("full_name", "Investor")).putString("account_email", session.email).putBoolean("logged", true).apply()
+                        loadCloudWalletThenDashboard()
+                    }
+                }
+            } catch (e: Exception) {
+                runOnUiThread { hideLoading(); auth(false); toast("Google sign-in could not be completed: " + (e.message ?: "Please try again.")) }
+            }
+        }
+    }
+
+    private fun startGoogleSignIn() {
+        if (!cloud.isConfigured()) { toast("Cloud connection is not configured. Please rebuild after adding the Supabase GitHub secrets."); return }
+        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(cloud.googleOAuthUrl()))) }
+        catch (_: Exception) { toast("Could not open Google sign-in. Please try again.") }
+    }
+
     private fun saveSession(session:SupabaseClient.Session) {
         cloudAccessToken=session.accessToken; cloudRefreshToken=session.refreshToken; cloudUserId=session.userId
         p.edit().putString("cloud_access_token",session.accessToken).putString("cloud_refresh_token",session.refreshToken).putString("cloud_user_id",session.userId).apply()
     }
     private fun loadCloudWalletThenDashboard() {
+        showLoading("Loading your secure investment dashboard…")
         val token=cloudAccessToken ?: p.getString("cloud_access_token",null)
         val uid=cloudUserId ?: p.getString("cloud_user_id",null)
         if(token==null || uid==null) { auth(false); return }
@@ -84,9 +164,10 @@ class MainActivity : AppCompatActivity() {
                         .putFloat("capital",wallet.optDouble("capital_amount",0.0).toFloat())
                         .putFloat("profits",wallet.optDouble("profit_amount",0.0).toFloat())
                         .putFloat("withdrawals",wallet.optDouble("withdrawals_amount",0.0).toFloat()).apply()
+                    hideLoading()
                     dashboard()
                 }
-            } catch(e:Exception) { runOnUiThread { toast("Cloud account data could not be loaded: "+(e.message ?: "network error")); auth(false) } }
+            } catch(e:Exception) { runOnUiThread { hideLoading(); toast("Cloud account data could not be loaded: "+(e.message ?: "network error")); auth(false) } }
         }
     }
 
@@ -103,6 +184,8 @@ class MainActivity : AppCompatActivity() {
         val pass=input("Password",InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
         page.addView(card().apply{
             addView(name);addView(email,mp(12));addView(pass,mp(12))
+            addView(btn("Continue with Google",false){ startGoogleSignIn() },mp(14))
+            addView(txt("Or continue with email",12,muted,false,12))
             addView(btn(if(register)"Create account" else "Sign in",true){
                 val n=name.text.toString().trim();val e=email.text.toString().trim().lowercase(Locale.ROOT);val pw=pass.text.toString()
                 when {
@@ -164,7 +247,7 @@ class MainActivity : AppCompatActivity() {
             addView(btn(if(register)"Already registered? Sign in" else "Create a new account",false){auth(!register)},mp(8))
         },mp(24))
         page.addView(txt("Accounts and balances require the configured Supabase cloud service. New accounts need administrator approval.",12,muted,false,18))
-        setContentView(scroll)
+        showPage(scroll)
     }
     private fun resetPasswordScreen(accessToken:String) {
         val(scroll,page)=root("Set a new password","Choose a new password for your MY INVEST account")
@@ -188,7 +271,7 @@ class MainActivity : AppCompatActivity() {
                 }
             },mp(16))
         },mp(20))
-        setContentView(scroll)
+        showPage(scroll)
     }
 
     private fun dashboard(){
@@ -211,7 +294,7 @@ class MainActivity : AppCompatActivity() {
         page.addView(card().apply{val active=p.getString("active_plan",null);addView(txt(active?:"No active plan",17,ink,true));addView(txt(if(active==null)"Choose a plan to get started." else "Selected plan",13,muted,false,5));addView(btn(if(active==null)"Explore plans" else "View plans",false){plans()},mp(12))},mp(12))
         page.addView(txt("Account",19,ink,true,24))
         page.addView(LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;addView(btn("Transactions",false){transactions()},LinearLayout.LayoutParams(0,dp(46),1f));addView(gap(8),LinearLayout.LayoutParams(dp(8),1));addView(btn("Profile",false){profile()},LinearLayout.LayoutParams(0,dp(46),1f))},mp(12))
-        setContentView(scroll)
+        showPage(scroll, true)
     }
     private data class Plan(val name:String,val icon:String,val min:Float,val tagline:String,val details:String)
     private val planList=listOf(Plan("Bronze","🥉",250f,"A simple starting tier","Portfolio overview and transaction tracking"),Plan("Silver","🥈",500f,"For growing portfolios","Portfolio tracking and plan history"),Plan("Gold","🥇",1000f,"For established investors","Expanded portfolio summaries"),Plan("Platinum","💎",5000f,"For larger portfolios","Full plan overview and account reporting"),Plan("Diamond","💠",10000f,"A premium investment tier","Enhanced portfolio reporting and history"),Plan("Elite","👑",25000f,"The highest membership tier","Premium account overview and reporting"))
@@ -221,7 +304,7 @@ class MainActivity : AppCompatActivity() {
         val loading=txt("Loading plans from your cloud account…",13,muted,false,12)
         page.addView(loading)
         page.addView(btn("Back to dashboard",false){dashboard()},mp(18))
-        setContentView(scroll)
+        showPage(scroll)
         if(token==null){loading.text="Please sign in to load plans.";return}
         thread {
             try {
@@ -279,7 +362,7 @@ class MainActivity : AppCompatActivity() {
                 }}
             },mp(16))
         },mp(22))
-        page.addView(btn("Cancel",false){dashboard()},mp(12));setContentView(scroll)
+        page.addView(btn("Cancel",false){dashboard()},mp(12));showPage(scroll)
     }
     private fun transactions(){
         val(scroll,page)=root("Transactions","Cloud-synced account activity")
@@ -287,7 +370,7 @@ class MainActivity : AppCompatActivity() {
         val uid=cloudUserId ?: p.getString("cloud_user_id",null)
         val status=txt("Loading transactions…",13,muted,false,12);page.addView(status)
         page.addView(btn("Back",false){dashboard()},mp(18))
-        setContentView(scroll)
+        showPage(scroll)
         if(token==null||uid==null){status.text="Please sign in to your cloud account.";return}
         thread{
             try{
@@ -374,7 +457,7 @@ class MainActivity : AppCompatActivity() {
             auth(false)
         },mp(18))
         page.addView(btn("Back to dashboard",false){dashboard()},mp(10))
-        setContentView(scroll)
+        showPage(scroll)
         if(token!=null&&uid!=null) thread{
             try{
                 val data=cloud.fetchProfileDetails(token,uid)
@@ -412,9 +495,9 @@ class MainActivity : AppCompatActivity() {
         },mp(16))
         page.addView(btn("Manage investment plans",false){adminPlanManagement()},mp(8))
         val token=cloudAccessToken ?: p.getString("cloud_access_token",null)
-        if(token==null){page.addView(txt("Please sign in again.",13,muted,false,12));setContentView(scroll);return}
+        if(token==null){page.addView(txt("Please sign in again.",13,muted,false,12));showPage(scroll);return}
         val loading=txt("Loading cloud users…",13,muted,false,14);page.addView(loading)
-        setContentView(scroll)
+        showPage(scroll)
         thread{
             try{
                 val users=cloud.searchUsers(token,query)
@@ -567,10 +650,10 @@ class MainActivity : AppCompatActivity() {
         if(cloudRole!="admin"){toast("Administrator access required.");return}
         val token=cloudAccessToken ?: p.getString("cloud_access_token",null)
         val(scroll,page)=root("Investment plan management","Edit the six plans. Changes are restricted to administrators and recorded in the audit log.")
-        if(token==null){page.addView(txt("Please sign in again.",13,muted,false,12));setContentView(scroll);return}
+        if(token==null){page.addView(txt("Please sign in again.",13,muted,false,12));showPage(scroll);return}
         val status=txt("Loading plans from cloud…",13,muted,false,10);page.addView(status)
         page.addView(btn("Back to administrator tools",false){adminDashboard()},mp(14))
-        setContentView(scroll)
+        showPage(scroll)
         thread {
             try {
                 val plans=cloud.fetchAdminPlans(token)
@@ -652,7 +735,7 @@ class MainActivity : AppCompatActivity() {
             },mp(16))
         },mp(20))
         page.addView(btn("Cancel",false){adminDashboard(query)},mp(12))
-        setContentView(scroll)
+        showPage(scroll)
     }
 
     private fun manageBalances(){
@@ -667,7 +750,7 @@ class MainActivity : AppCompatActivity() {
                 when{d==null||pr==null||d<0||pr<0->toast("Enter valid non-negative amounts.");else->{p.edit().putFloat("deposited",d).putFloat("profits",pr).apply();addTx("Balance updated","Account balance figures",d);toast("Balances updated.");dashboard()}}
             },mp(18))
         },mp(20))
-        page.addView(btn("Cancel",false){profile()},mp(12));setContentView(scroll)
+        page.addView(btn("Cancel",false){profile()},mp(12));showPage(scroll)
     }
 
     private fun addTx(type:String,detail:String,value:Float){
