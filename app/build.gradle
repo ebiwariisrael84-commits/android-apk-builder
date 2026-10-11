@@ -25,6 +25,9 @@ android {
 
     buildTypes {
         release {
+            // Temporary test signing so the APK can be installed directly on Android.
+            // For public production distribution, replace with a persistent private release key.
+            signingConfig signingConfigs.debug
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
