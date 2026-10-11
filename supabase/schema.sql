@@ -226,7 +226,7 @@ create policy "investor may request investment" on public.investments for insert
 with check (
   user_id=auth.uid() and status='pending' and fixed_profit_rate=60.00
   and exists(select 1 from public.profiles where id=auth.uid() and account_status='approved')
-  and exists(select 1 from public.investment_plans where id=plan_id and is_active and principal_amount >= minimum_amount)
+  and exists(select 1 from public.investment_plans p where p.id=investments.plan_id and p.is_active and investments.principal_amount >= p.minimum_amount)
 );
 drop policy if exists "admin manages investments" on public.investments;
 create policy "admin manages investments" on public.investments for all to authenticated using (public.is_admin()) with check (public.is_admin());
@@ -275,3 +275,108 @@ with check (bucket_id='kyc-documents' and public.is_admin());
 -- update public.profiles set role='admin', account_status='approved'
 -- where id=(select id from auth.users where email='YOUR_ADMIN_EMAIL');
 -- Verify exactly one row was updated. Never expose the service_role key in the Android app.
+
+
+-- Authenticated investors must request investments and withdrawals through these
+-- validated RPCs; they cannot write wallet balances directly.
+create or replace function public.request_investment(p_plan_slug text, p_amount numeric)
+returns uuid
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_plan public.investment_plans%rowtype;
+  v_wallet public.wallet_accounts%rowtype;
+  v_reserved numeric(14,2);
+  v_id uuid;
+begin
+  if v_uid is null then raise exception 'Sign in required'; end if;
+  if not exists(select 1 from public.profiles where id=v_uid and role='investor' and account_status='approved') then
+    raise exception 'An approved investor account is required';
+  end if;
+  if p_amount is null or p_amount <= 0 then raise exception 'Enter a valid investment amount'; end if;
+  select * into v_plan from public.investment_plans where slug=p_plan_slug and is_active;
+  if not found then raise exception 'Investment plan is unavailable'; end if;
+  if p_amount < v_plan.minimum_amount then raise exception 'Amount is below this plan minimum'; end if;
+  select * into v_wallet from public.wallet_accounts where user_id=v_uid for update;
+  if not found then raise exception 'Wallet not found'; end if;
+  select coalesce(sum(amount),0) into v_reserved from public.transactions
+    where user_id=v_uid and transaction_type='withdrawal_request' and status='pending';
+  v_reserved := v_reserved + coalesce((select sum(principal_amount) from public.investments
+    where user_id=v_uid and status='pending'),0);
+  if p_amount > v_wallet.deposited_amount - v_wallet.capital_amount - v_wallet.withdrawals_amount - v_reserved then
+    raise exception 'Insufficient available balance after pending requests';
+  end if;
+  insert into public.investments(user_id,plan_id,principal_amount,fixed_profit_rate,fixed_profit_amount,status)
+  values(v_uid,v_plan.id,p_amount,v_plan.fixed_profit_rate,round(p_amount*v_plan.fixed_profit_rate/100,2),'pending')
+  returning id into v_id;
+  insert into public.transactions(user_id,transaction_type,amount,status,description,reference)
+  values(v_uid,'investment',p_amount,'pending','Investment request: '||v_plan.name,v_id::text);
+  return v_id;
+end;
+$$;
+
+create or replace function public.request_withdrawal(p_amount numeric)
+returns uuid
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  v_uid uuid := auth.uid();
+  v_wallet public.wallet_accounts%rowtype;
+  v_reserved numeric(14,2);
+  v_id uuid;
+begin
+  if v_uid is null then raise exception 'Sign in required'; end if;
+  if not exists(select 1 from public.profiles where id=v_uid and role='investor' and account_status='approved') then
+    raise exception 'An approved investor account is required';
+  end if;
+  if p_amount is null or p_amount <= 0 then raise exception 'Enter a valid withdrawal amount'; end if;
+  select * into v_wallet from public.wallet_accounts where user_id=v_uid for update;
+  if not found then raise exception 'Wallet not found'; end if;
+  select coalesce(sum(amount),0) into v_reserved from public.transactions
+    where user_id=v_uid and transaction_type='withdrawal_request' and status='pending';
+  v_reserved := v_reserved + coalesce((select sum(principal_amount) from public.investments
+    where user_id=v_uid and status='pending'),0);
+  if p_amount > v_wallet.deposited_amount - v_wallet.capital_amount - v_wallet.withdrawals_amount - v_reserved then
+    raise exception 'Insufficient available balance after pending requests';
+  end if;
+  insert into public.transactions(user_id,transaction_type,amount,status,description)
+  values(v_uid,'withdrawal_request',p_amount,'pending','Withdrawal request awaiting administrator review')
+  returning id into v_id;
+  return v_id;
+end;
+$$;
+
+create or replace function public.admin_review_investment(p_investment_id uuid, p_decision text, p_reason text default null)
+returns void
+language plpgsql security definer
+set search_path = public
+as $$
+declare v_inv public.investments%rowtype;
+begin
+  if not public.is_admin() then raise exception 'Administrator access required'; end if;
+  if p_decision not in ('active','rejected') then raise exception 'Decision must be active or rejected'; end if;
+  select * into v_inv from public.investments where id=p_investment_id for update;
+  if not found or v_inv.status <> 'pending' then raise exception 'Pending investment not found'; end if;
+  if p_decision='active' then
+    update public.investments set status='active',updated_at=now() where id=v_inv.id;
+    update public.wallet_accounts set capital_amount=capital_amount+v_inv.principal_amount,updated_at=now() where user_id=v_inv.user_id;
+    update public.transactions set status='posted',description=description||' — approved' where reference=v_inv.id::text;
+  else
+    update public.investments set status='rejected',updated_at=now() where id=v_inv.id;
+    update public.transactions set status='rejected',description=description||' — rejected: '||coalesce(p_reason,'') where reference=v_inv.id::text;
+  end if;
+  insert into public.admin_audit_log(admin_user_id,target_user_id,action,details)
+  values(auth.uid(),v_inv.user_id,'investment_reviewed',jsonb_build_object('investment_id',v_inv.id,'decision',p_decision,'reason',p_reason));
+end;
+$$;
+
+revoke insert, update, delete on public.investments from authenticated;
+revoke all on function public.request_investment(text,numeric) from public, anon;
+revoke all on function public.request_withdrawal(numeric) from public, anon;
+revoke all on function public.admin_review_investment(uuid,text,text) from public, anon;
+grant execute on function public.request_investment(text,numeric) to authenticated;
+grant execute on function public.request_withdrawal(numeric) to authenticated;
+grant execute on function public.admin_review_investment(uuid,text,text) to authenticated;
