@@ -31,6 +31,16 @@ The Android client should only use the Project URL and publishable/anon key. The
 
 Do not post database passwords, access tokens, service-role keys, or email-provider secrets in chat or source code. We will add the Android client integration after the project URL and publishable/anon key are available.
 
+## 5. Add build configuration to GitHub Actions
+After creating the Supabase project, open this repository on GitHub:
+1. Open Settings → Secrets and variables → Actions.
+2. Choose New repository secret.
+3. Add `SUPABASE_URL` with the Project URL.
+4. Add `SUPABASE_ANON_KEY` with the publishable/anon client key.
+5. Save each secret. Do not add a `service_role` key.
+
+The Android Gradle configuration and build workflow now accept these values at build time. The runtime API integration is still a separate step; adding secrets alone does not connect sign-in or account data.
+
 ## Current limitations
 - The existing app still uses local SharedPreferences for sign-in, balances and transaction history.
 - This SQL file does not itself connect the APK to Supabase.
