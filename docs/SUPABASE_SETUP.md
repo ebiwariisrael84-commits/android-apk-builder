@@ -13,7 +13,7 @@ This project currently has a local-only Android account system. The Android clie
 2. Open `supabase/schema.sql` in this repository and copy its entire contents.
 3. Paste it into a new SQL query and Run.
 4. Confirm the query completes without errors.
-5. Open Storage and create a bucket named `kyc-documents`; keep it PRIVATE (public access off).
+5. The schema configures storage access policies. Create a bucket named `kyc-documents` in Storage and keep it PRIVATE (public access off) if it does not already exist.
 
 The schema creates six plans with a configured 60% rate and a `fixed_once` rule, plus validated request RPCs and audited administrator routines. This is configuration, not a guarantee of earnings. The app displays profit separately from deposited capital; do not credit profit unless supported by verified actual performance. If you already ran an earlier version of this schema, rerun the latest complete `supabase/schema.sql` so the new functions and policies are installed.
 
@@ -41,10 +41,16 @@ After creating the Supabase project, open this repository on GitHub:
 
 The Android Gradle configuration and build workflow now accept these values at build time. The runtime API integration is still a separate step; adding secrets alone does not connect sign-in or account data.
 
+## Account notification emails
+- The app now requests password-reset emails through Supabase Auth and handles the `myinvest://reset-password` deep link to set a new password.
+- The repository includes `supabase/functions/admin-notify/index.ts`. Deploy it as the `admin-notify` Edge Function with JWT verification enabled.
+- Configure Edge Function secrets `RESEND_API_KEY` and `FROM_EMAIL`; verify the sender domain with Resend. The function checks the caller's live session and approved admin role before sending account-status emails.
+- Approval/rejection emails will not send until the function is deployed, Resend is configured, and the account's email settings are tested.
+
 ## Current limitations
-- The existing app still uses local SharedPreferences for sign-in, balances and transaction history.
-- This SQL file does not itself connect the APK to Supabase.
-- Approval and KYC status emails are not configured; they require a verified email/Edge Function provider and end-to-end tests.
-- Deposit collection and actual withdrawal payouts are not connected to a payment provider. The app records requests; an administrator-approved withdrawal still requires a real payment provider/manual payout and verified server-side reconciliation.
+- The schema must still be executed in your live Supabase project and the private `kyc-documents` bucket must exist.
+- Your administrator role must be assigned manually to the trusted owner account in the Supabase SQL Editor.
+- End-to-end login, password reset, email delivery, private document access, plan editing and cross-device behavior require live tests after setup.
+- Deposit collection and actual withdrawal payouts are intentionally not connected to a payment provider. Requests can be submitted and reviewed, but approval does not transfer money.e app records requests; an administrator-approved withdrawal still requires a real payment provider/manual payout and verified server-side reconciliation.
 - KYC images are uploaded to a private bucket and admin image links expire after five minutes. Create the `kyc-documents` bucket as private before testing.
 - The database schema must be executed, the owner must be manually promoted to admin, and login/KYC/permissions must be tested against the live Supabase project. A successful APK build alone does not prove the live backend works.
