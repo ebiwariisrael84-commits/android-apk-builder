@@ -58,9 +58,9 @@ class MainActivity : AppCompatActivity() {
         val deposited=amt("deposited");val capital=amt("capital");val profits=amt("profits");val withdrawals=amt("withdrawals")
         val available=(deposited-capital-withdrawals).coerceAtLeast(0f)
         page.addView(card().apply{
-            setBackgroundColor(ink);addView(txt("TOTAL DEPOSITED",11,Color.LTGRAY,true));addView(txt(money(deposited),30,Color.WHITE,true,10));addView(txt("Recorded deposited amount",12,Color.rgb(208,225,216),false,4))
+            setBackgroundColor(ink);addView(txt("PROFIT",11,Color.rgb(173,239,208),true));addView(txt(money(profits),36,Color.WHITE,true,8));addView(txt("Recorded profit balance • USD",12,Color.rgb(208,225,216),false,4))
             addView(View(this@MainActivity).apply{setBackgroundColor(Color.rgb(73,89,103));layoutParams=LinearLayout.LayoutParams(-1,dp(1)).apply{topMargin=dp(18);bottomMargin=dp(12)}})
-            addView(rowMetric("Available balance",money(available)));addView(rowMetric("Capital invested",money(capital)));addView(rowMetric("Profits",money(profits)));addView(rowMetric("Withdrawals",money(withdrawals)))
+            addView(rowMetric("Deposited amount",money(deposited)));addView(rowMetric("Capital invested",money(capital)));addView(rowMetric("Available balance",money(available)));addView(rowMetric("Withdrawals",money(withdrawals)))
         },mp(22))
         page.addView(txt("Quick actions",19,ink,true,24))
         page.addView(LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;addView(btn("Withdraw",true){withdraw()},LinearLayout.LayoutParams(0,dp(48),1f));addView(gap(10),LinearLayout.LayoutParams(dp(10),1));addView(btn("Investment plans",false){plans()},LinearLayout.LayoutParams(0,dp(48),1f))},mp(12))
@@ -79,7 +79,7 @@ class MainActivity : AppCompatActivity() {
     private fun plans(){
         val(scroll,page)=root("Investment plans","Choose the tier that fits your goals")
         planList.forEach{plan->page.addView(card().apply{
-            addView(txt(plan.icon+"  "+plan.name,21,ink,true));addView(txt(plan.tagline,13,green,true,4));addView(txt("Investment amount: "+money(plan.min),16,ink,true,14));addView(txt(plan.details,13,muted,false,5));addView(txt("Weekly returns are subject to verified performance and the app’s configured profit rules.",11,muted,false,10))
+            addView(txt(plan.icon+"  "+plan.name,21,ink,true));addView(txt(plan.tagline,13,green,true,4));addView(txt("Investment amount: "+money(plan.min),16,ink,true,14));addView(txt(plan.details,13,muted,false,5));addView(txt("Fixed configured rate: 60% once, not weekly or monthly. Profit is not guaranteed and must reflect verified performance.",11,muted,false,10))
             addView(btn(if(p.getString("active_plan",null)==plan.name)"Current plan" else "Select "+plan.name,true){
                 val available=(amt("deposited")-amt("capital")-amt("withdrawals")).coerceAtLeast(0f)
                 when{p.getString("active_plan",null)==plan.name->toast(plan.name+" is your current plan.")
