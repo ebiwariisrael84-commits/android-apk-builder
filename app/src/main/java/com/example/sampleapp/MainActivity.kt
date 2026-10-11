@@ -552,16 +552,30 @@ class MainActivity : AppCompatActivity() {
         p.edit().putString("transactions",a.toString()).apply()
     }
     private fun loadMarket(done:(String,FloatArray,String)->Unit){thread{
-        try{
-            val c=URL("https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?range=1mo&interval=1d").openConnection() as HttpURLConnection
-            c.connectTimeout=7000;c.readTimeout=7000;c.setRequestProperty("User-Agent","Mozilla/5.0")
-            val body=c.inputStream.bufferedReader().use{it.readText()};c.disconnect()
-            val result=JSONObject(body).getJSONObject("chart").getJSONArray("result").getJSONObject(0)
-            val closes=result.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0).getJSONArray("close")
-            val list=mutableListOf<Float>();for(i in 0 until closes.length())if(!closes.isNull(i))list.add(closes.getDouble(i).toFloat())
-            val values=list.toFloatArray();val first=values.firstOrNull()?:0f;val last=values.lastOrNull()?:0f;val pct=if(first>0)(last-first)/first*100 else 0f
-            runOnUiThread{done("Latest available market data • "+String.format(Locale.US,"%.2f",last),values,"1-month change: "+String.format(Locale.US,"%+.2f%%",pct))}
-        }catch(_:Exception){runOnUiThread{done("Market data unavailable. Check internet connection.",floatArrayOf(),"")}}
+        var lastError:Exception?=null
+        for(attempt in 0..2){
+            var connection:HttpURLConnection?=null
+            try{
+                connection=URL("https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?range=1mo&interval=1d").openConnection() as HttpURLConnection
+                connection.connectTimeout=7000;connection.readTimeout=7000;connection.setRequestProperty("User-Agent","Mozilla/5.0")
+                val status=connection.responseCode
+                if(status !in 200..299){
+                    if((status==408||status==429||status>=500)&&attempt<2){Thread.sleep(500L*(1L shl attempt));continue}
+                    throw java.io.IOException("Market data server returned HTTP "+status)
+                }
+                val body=connection.inputStream.bufferedReader().use{it.readText()}
+                val result=JSONObject(body).getJSONObject("chart").getJSONArray("result").getJSONObject(0)
+                val closes=result.getJSONObject("indicators").getJSONArray("quote").getJSONObject(0).getJSONArray("close")
+                val list=mutableListOf<Float>();for(i in 0 until closes.length())if(!closes.isNull(i))list.add(closes.getDouble(i).toFloat())
+                val values=list.toFloatArray();val first=values.firstOrNull()?:0f;val last=values.lastOrNull()?:0f;val pct=if(first>0)(last-first)/first*100 else 0f
+                runOnUiThread{done("Latest available market data • "+String.format(Locale.US,"%.2f",last),values,"1-month change: "+String.format(Locale.US,"%+.2f%%",pct))}
+                return@thread
+            }catch(e:Exception){
+                lastError=e
+                if(attempt<2)try{Thread.sleep(500L*(1L shl attempt))}catch(_:InterruptedException){Thread.currentThread().interrupt();break}
+            }finally{connection?.disconnect()}
+        }
+        runOnUiThread{done("Market data unavailable after 3 attempts. Check internet connection.",floatArrayOf(),"")}
     }}
     private inner class MarketLine(context:android.content.Context):View(context){
         private val line=Paint(Paint.ANTI_ALIAS_FLAG).apply{color=green;strokeWidth=dp(3).toFloat();style=Paint.Style.STROKE;strokeCap=Paint.Cap.ROUND;strokeJoin=Paint.Join.ROUND}
