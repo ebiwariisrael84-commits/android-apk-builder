@@ -286,6 +286,14 @@ jobs:
           test -f "$APK"
           ls -lh "$APK"
 
+      - name: Upload Aviator Predictor v28 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aviator-Predictor-v28-debug-APK
+          path: /tmp/aviator-v25/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Launch APK in Android emulator (startup smoke test)
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -306,14 +314,6 @@ jobs:
               exit 1
             fi
             adb shell pidof com.aviator.live
-
-      - name: Upload Aviator Predictor v28 APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Aviator-Predictor-v28-debug-APK
-          path: /tmp/aviator-v25/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-          retention-days: 14
 
       - name: Upload build reports if available
         if: always()
