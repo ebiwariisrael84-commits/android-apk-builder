@@ -214,6 +214,11 @@ class SupabaseClient(private val projectUrl: String, private val publishableKey:
             JSONObject().put("p_user_id", userId).put("p_status", status).put("p_reason", reason).toString(), accessToken)
     }
 
+    fun notifyAccountStatus(accessToken: String, userId: String, status: String, reason: String) {
+        request("POST", "/functions/v1/admin-notify",
+            JSONObject().put("user_id", userId).put("status", status).put("reason", reason).toString(), accessToken)
+    }
+
     private fun request(method: String, path: String, body: String? = null, accessToken: String? = null): Response {
         if (!isConfigured()) throw ApiException(0, "Cloud connection is not configured. Check GitHub Actions secrets.")
         var lastError: Exception? = null
