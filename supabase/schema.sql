@@ -414,3 +414,41 @@ $$;
 
 revoke all on function public.admin_review_withdrawal(uuid,text,text) from public, anon;
 grant execute on function public.admin_review_withdrawal(uuid,text,text) to authenticated;
+
+
+-- Audited administrator-only investment plan editor.
+create or replace function public.admin_update_investment_plan(
+  p_plan_id uuid, p_name text, p_minimum_amount numeric,
+  p_fixed_profit_rate numeric, p_is_active boolean
+)
+returns void
+language plpgsql security definer
+set search_path = public
+as $$
+declare v_old public.investment_plans%rowtype;
+begin
+  if not public.is_admin() then raise exception 'Administrator access required'; end if;
+  if p_name is null or length(trim(p_name)) < 2 then raise exception 'Plan name is required'; end if;
+  if p_minimum_amount is null or p_minimum_amount <= 0 then raise exception 'Minimum amount must be greater than zero'; end if;
+  if p_fixed_profit_rate is null or p_fixed_profit_rate < 0 or p_fixed_profit_rate > 100 then
+    raise exception 'Configured rate must be between 0 and 100';
+  end if;
+  select * into v_old from public.investment_plans where id=p_plan_id for update;
+  if not found then raise exception 'Investment plan not found'; end if;
+  update public.investment_plans
+    set name=trim(p_name), minimum_amount=p_minimum_amount,
+        fixed_profit_rate=p_fixed_profit_rate, is_active=p_is_active, updated_at=now()
+    where id=p_plan_id;
+  insert into public.admin_audit_log(admin_user_id,target_user_id,action,details)
+  values(auth.uid(),null,'investment_plan_updated',jsonb_build_object(
+    'plan_id',p_plan_id,'slug',v_old.slug,
+    'old',jsonb_build_object('name',v_old.name,'minimum_amount',v_old.minimum_amount,
+      'fixed_profit_rate',v_old.fixed_profit_rate,'is_active',v_old.is_active),
+    'new',jsonb_build_object('name',trim(p_name),'minimum_amount',p_minimum_amount,
+      'fixed_profit_rate',p_fixed_profit_rate,'is_active',p_is_active)));
+end;
+$$;
+revoke insert, update, delete on public.investment_plans from authenticated;
+grant select on public.investment_plans to authenticated;
+revoke all on function public.admin_update_investment_plan(uuid,text,numeric,numeric,boolean) from public, anon;
+grant execute on function public.admin_update_investment_plan(uuid,text,numeric,numeric,boolean) to authenticated;
