@@ -47,7 +47,7 @@ class MainActivity : AppCompatActivity() {
                         cloudRole=profile.optString("role","investor"); loadCloudWalletThenDashboard()
                     } else { p.edit().remove("cloud_access_token").remove("cloud_refresh_token").putBoolean("logged",false).apply(); auth(false); toast("Your account is "+profile.optString("account_status","pending")+". Dashboard access requires administrator approval.") }
                 }
-            } catch (_:Exception) { runOnUiThread { p.edit().remove("cloud_access_token").remove("cloud_refresh_token").putBoolean("logged",false).apply(); auth(false) } }
+            } catch (_:Exception) { runOnUiThread { p.edit().putBoolean("logged",false).apply(); auth(false); toast("Could not reconnect to your cloud account. Check internet and sign in again to retry.") } }
         }
     }
     private fun saveSession(session:SupabaseClient.Session) {
@@ -100,7 +100,7 @@ class MainActivity : AppCompatActivity() {
                                     val response=cloud.signUp(e,pw,n)
                                     val obj=try{response.json()}catch(_:Exception){JSONObject()}
                                     val access=obj.optString("access_token")
-                                    val user=obj.optJSONObject("user") ?: obj.optJSONObject("data")?.optJSONObject("user")
+                                    val user=obj.optJSONObject("user") ?: obj.optJSONObject("data")?.optJSONObject("user") ?: if(obj.has("id")) obj else null
                                     if(access.isBlank() || user==null) {
                                         runOnUiThread { toast("Registration submitted. Check your email to confirm the account, then sign in. Your profile must be approved by the administrator.") }
                                     } else {
