@@ -166,6 +166,7 @@ class MainActivity : AppCompatActivity() {
         val page=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(20),dp(20),dp(28));setBackgroundColor(bg)}
         val scroll=ScrollView(this).apply{isFillViewport=true;addView(page)}
         lastScrollView=scroll
+        enablePullToRefresh { refreshPage(title) }
         shell.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
         if(showPageTitle) page.addView(txt(title,26,ink,true))
         if(sub!=null)page.addView(txt(sub,14,muted,false,7))
@@ -364,7 +365,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-        enablePullToRefresh { loadCloudWalletThenDashboard() }
         page.addView(txt("Account",19,ink,true,24))
         page.addView(LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;addView(btn("Transactions",false){transactions()},LinearLayout.LayoutParams(0,dp(46),1f));addView(gap(8),LinearLayout.LayoutParams(dp(8),1));addView(btn("Profile",false){profile()},LinearLayout.LayoutParams(0,dp(46),1f))},mp(12))
         showPage(scroll, true)
@@ -858,6 +858,16 @@ class MainActivity : AppCompatActivity() {
             done(if(quotes.isEmpty())"Latest available quotes unavailable • pull down to retry" else "Latest available quotes • 5-day change • delayed/subject to provider availability",quotes)
         }
     }}
+    private fun refreshPage(title:String) {
+        when(title) {
+            "Your dashboard" -> { toast("Refreshing cloud account and market data…");loadCloudWalletThenDashboard() }
+            "Investment plans" -> { toast("Refreshing investment plans…");plans() }
+            "Transactions" -> { toast("Refreshing transactions…");transactions() }
+            "Profile" -> { toast("Refreshing profile…");profile() }
+            "About Evercrest Capital" -> aboutPage()
+            else -> toast("Pull-to-refresh is available on account and data pages.")
+        }
+    }
     private fun enablePullToRefresh(onRefresh:()->Unit) {
         val scroll=lastScrollView ?: return
         var startY=0f
@@ -869,7 +879,6 @@ class MainActivity : AppCompatActivity() {
                     val distance=event.y-startY
                     if(!triggered && scroll.scrollY==0 && distance>dp(100)) {
                         triggered=true
-                        toast("Refreshing cloud account and market data…")
                         onRefresh()
                     }
                 }
