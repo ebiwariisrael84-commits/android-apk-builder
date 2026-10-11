@@ -153,19 +153,28 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(3),dp(3),dp(3),dp(3))
         },android.widget.FrameLayout.LayoutParams(-1,-1))
         header.addView(logoFrame)
-        val brand=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(10),0,0,0)}
-        brand.addView(txt("EVERCREST CAPITAL",15,Color.WHITE,true))
-        brand.addView(txt("INVESTMENT ACCOUNT",9,Color.rgb(204,180,117),true,2))
-        header.addView(brand,LinearLayout.LayoutParams(0,-2,1f))
-        val about=txt(if(title=="About Evercrest Capital")"HOME" else "ABOUT",11,Color.rgb(231,196,119),true)
-        about.gravity=android.view.Gravity.CENTER
-        about.setPadding(dp(10),dp(12),dp(4),dp(12))
-        about.setOnClickListener{
-            if(title=="About Evercrest Capital"){
-                if(p.getBoolean("logged",false)) dashboard() else auth(false)
-            }else aboutPage()
+        val headerSpacer=View(this)
+        header.addView(headerSpacer,LinearLayout.LayoutParams(0,1,1f))
+        val nav=TextView(this).apply{
+            text="☰"; textSize=25f; gravity=android.view.Gravity.CENTER
+            setTextColor(Color.WHITE); contentDescription="Open navigation menu"
+            background=android.graphics.drawable.GradientDrawable().apply{setColor(Color.rgb(35,51,70));cornerRadius=dp(13).toFloat()}
+            setPadding(dp(10),dp(5),dp(10),dp(5))
+            setOnClickListener { anchor ->
+                val menu=PopupMenu(this@MainActivity,anchor)
+                menu.menu.add("Dashboard").setOnMenuItemClickListener { if(p.getBoolean("logged",false)) dashboard() else auth(false); true }
+                menu.menu.add("About Evercrest Capital").setOnMenuItemClickListener { aboutPage(); true }
+                if(p.getBoolean("logged",false)) {
+                    menu.menu.add("Profile").setOnMenuItemClickListener { profile(); true }
+                    menu.menu.add("Sign out").setOnMenuItemClickListener {
+                        p.edit().remove("cloud_access_token").remove("cloud_refresh_token").remove("cloud_user_id").putBoolean("logged",false).apply()
+                        cloudAccessToken=null; cloudRefreshToken=null; cloudUserId=null; auth(false); true
+                    }
+                }
+                menu.show()
+            }
         }
-        header.addView(about)
+        header.addView(nav,LinearLayout.LayoutParams(dp(44),dp(44)))
         shell.addView(header,LinearLayout.LayoutParams(-1,-2))
         val page=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(20),dp(20),dp(28));setBackgroundColor(bg)}
         val scroll=ScrollView(this).apply{isFillViewport=true;addView(page)}
@@ -459,11 +468,35 @@ class MainActivity : AppCompatActivity() {
         page.addView(welcomeRow, mp(8))
         val deposited=amt("deposited");val capital=amt("capital");val profits=amt("profits");val withdrawals=amt("withdrawals")
         val available=(deposited-capital-withdrawals).coerceAtLeast(0f)
-        page.addView(card().apply{
-            setBackgroundColor(ink);addView(txt("PROFIT",11,Color.rgb(173,239,208),true));addView(txt(money(profits),36,Color.WHITE,true,8));addView(txt("Recorded profit balance • USD",12,Color.rgb(208,225,216),false,4))
-            addView(View(this@MainActivity).apply{setBackgroundColor(Color.rgb(73,89,103));layoutParams=LinearLayout.LayoutParams(-1,dp(1)).apply{topMargin=dp(18);bottomMargin=dp(12)}})
-            addView(rowMetric("Deposited amount",money(deposited)));addView(rowMetric("Capital invested",money(capital)));addView(rowMetric("Available balance",money(available)));addView(rowMetric("Withdrawals",money(withdrawals)))
-        },mp(22))
+        page.addView(LinearLayout(this).apply{
+            orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(20),dp(20),dp(18));elevation=dp(5).toFloat()
+            background=android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(Color.rgb(9,22,42),Color.rgb(18,52,75),Color.rgb(17,91,78))).apply{cornerRadius=dp(26).toFloat();setStroke(dp(1),Color.rgb(52,102,112))}
+            addView(LinearLayout(this@MainActivity).apply{
+                orientation=LinearLayout.HORIZONTAL;gravity=android.view.Gravity.CENTER_VERTICAL
+                addView(txt("PORTFOLIO OVERVIEW",11,Color.rgb(177,221,212),true),LinearLayout.LayoutParams(0,-2,1f))
+                addView(txt("USD  •  LIVE ACCOUNT",9,Color.rgb(235,204,129),true).apply{
+                    background=android.graphics.drawable.GradientDrawable().apply{setColor(Color.argb(35,255,255,255));cornerRadius=dp(20).toFloat()}
+                    setPadding(dp(9),dp(6),dp(9),dp(6))
+                })
+            })
+            addView(txt("TOTAL PROFIT",11,Color.rgb(166,231,204),true,18))
+            addView(txt(money(profits),38,Color.WHITE,true,2))
+            addView(txt("Recorded profit balance",12,Color.rgb(204,225,226),false,3))
+            addView(View(this@MainActivity).apply{background=android.graphics.drawable.GradientDrawable().apply{setColor(Color.argb(90,196,220,223));cornerRadius=dp(2).toFloat()};layoutParams=LinearLayout.LayoutParams(-1,dp(1)).apply{topMargin=dp(18);bottomMargin=dp(14)}})
+            addView(LinearLayout(this@MainActivity).apply{
+                orientation=LinearLayout.HORIZONTAL
+                addView(metricTile("DEPOSITED",money(deposited),Color.rgb(37,76,91)),LinearLayout.LayoutParams(0,-2,1f))
+                addView(gap(9),LinearLayout.LayoutParams(dp(9),1))
+                addView(metricTile("CAPITAL",money(capital),Color.rgb(37,76,91)),LinearLayout.LayoutParams(0,-2,1f))
+            })
+            addView(LinearLayout(this@MainActivity).apply{
+                orientation=LinearLayout.HORIZONTAL;setPadding(0,dp(9),0,0)
+                addView(metricTile("AVAILABLE",money(available),Color.rgb(37,76,91)),LinearLayout.LayoutParams(0,-2,1f))
+                addView(gap(9),LinearLayout.LayoutParams(dp(9),1))
+                addView(metricTile("WITHDRAWN",money(withdrawals),Color.rgb(37,76,91)),LinearLayout.LayoutParams(0,-2,1f))
+            })
+        },mp(18))
         page.addView(txt("Quick actions",19,ink,true,24))
         page.addView(LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;addView(btn("Withdraw",true){withdraw()},LinearLayout.LayoutParams(0,dp(48),1f));addView(gap(10),LinearLayout.LayoutParams(dp(10),1));addView(btn("Investment plans",false){plans()},LinearLayout.LayoutParams(0,dp(48),1f))},mp(12))
         page.addView(txt("Companies associated with Elon Musk",19,ink,true,24))
@@ -479,14 +512,16 @@ class MainActivity : AppCompatActivity() {
             Triple("Neuralink","Brain-computer interface research • privately held; public shares are not generally available","https://neuralink.com/"),
             Triple("The Boring Company","Tunnel and infrastructure technology • privately held","https://www.boringcompany.com/")
         )
-        muskCompanies.forEach { company ->
+        muskCompanies.forEachIndexed { index, company ->
             page.addView(card().apply {
-                addView(txt(company.first,16,ink,true))
-                addView(txt(company.second,12,muted,false,6))
-                addView(btn("Open official website / investor information",false) {
+                setPadding(dp(10),dp(10),dp(10),dp(14))
+                addView(companyBanner(company.first,company.second,index),LinearLayout.LayoutParams(-1,dp(142)))
+                addView(txt(company.first,17,ink,true).apply{setPadding(dp(7),dp(13),dp(7),0)})
+                addView(txt(company.second,12,muted,false,6).apply{setPadding(dp(7),0,dp(7),0)})
+                addView(btn("Explore company  ↗",false) {
                     openExternalUrl(company.third)
-                },mp(10))
-            },mp(10))
+                },LinearLayout.LayoutParams(-1,dp(46)).apply{topMargin=dp(12);leftMargin=dp(6);rightMargin=dp(6)})
+            },mp(12))
         }
         page.addView(txt("Company ownership, listing status and investment availability can change. Always verify current information directly with the company and your licensed broker.",11,muted,false,8))
         page.addView(txt("Your active investments",19,ink,true,24))
@@ -1072,6 +1107,53 @@ class MainActivity : AppCompatActivity() {
             for(i in 0..3)canvas.drawLine(l,t+(b-t)*i/3f,r,t+(b-t)*i/3f,grid)
             val v=marketValues;if(v.size<2)return;val mn=v.minOrNull()?:return;val mx=v.maxOrNull()?:return;val range=(mx-mn).takeIf{it>0}?:1f;val path=Path()
             v.forEachIndexed{i,n->val x=l+(r-l)*i/(v.size-1);val y=b-(n-mn)/range*(b-t);if(i==0)path.moveTo(x,y)else path.lineTo(x,y)};canvas.drawPath(path,line)
+        }
+    }
+    private fun metricTile(label:String,value:String,tileColor:Int)=LinearLayout(this).apply{
+        orientation=LinearLayout.VERTICAL;setPadding(dp(12),dp(12),dp(10),dp(12))
+        background=android.graphics.drawable.GradientDrawable().apply{setColor(tileColor);cornerRadius=dp(15).toFloat();setStroke(dp(1),Color.argb(65,205,230,229))}
+        addView(txt(label,9,Color.rgb(176,211,210),true))
+        addView(txt(value,16,Color.WHITE,true,5))
+    }
+    private fun companyBanner(name:String,detail:String,index:Int):View {
+        val palettes=arrayOf(
+            intArrayOf(Color.rgb(27,18,24),Color.rgb(130,28,43),Color.rgb(214,67,73)),
+            intArrayOf(Color.rgb(7,22,46),Color.rgb(24,59,105),Color.rgb(64,123,171)),
+            intArrayOf(Color.rgb(24,14,43),Color.rgb(76,34,119),Color.rgb(133,79,180)),
+            intArrayOf(Color.rgb(5,42,42),Color.rgb(17,104,94),Color.rgb(73,165,142)),
+            intArrayOf(Color.rgb(42,30,17),Color.rgb(113,76,37),Color.rgb(194,143,69))
+        )
+        val palette=palettes[index%palettes.size]
+        val initials=when(index){0->"T";1->"S";2->"x";3->"N";else->"B"}
+        return android.widget.FrameLayout(this).apply{
+            background=android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.TL_BR,palette).apply{cornerRadius=dp(20).toFloat()}
+            clipToOutline=true
+            addView(View(this@MainActivity).apply{
+                background=android.graphics.drawable.GradientDrawable().apply{shape=android.graphics.drawable.GradientDrawable.OVAL;setColor(Color.argb(24,255,255,255))}
+            },android.widget.FrameLayout.LayoutParams(dp(150),dp(150),android.view.Gravity.RIGHT or android.view.Gravity.CENTER_VERTICAL).apply{rightMargin=dp(-28)})
+            addView(View(this@MainActivity).apply{
+                background=android.graphics.drawable.GradientDrawable().apply{shape=android.graphics.drawable.GradientDrawable.OVAL;setColor(Color.argb(22,255,255,255))}
+            },android.widget.FrameLayout.LayoutParams(dp(90),dp(90),android.view.Gravity.RIGHT or android.view.Gravity.TOP).apply{rightMargin=dp(55);topMargin=dp(-35)})
+            val content=LinearLayout(this@MainActivity).apply{
+                orientation=LinearLayout.VERTICAL;gravity=android.view.Gravity.CENTER_VERTICAL
+                setPadding(dp(18),dp(14),dp(18),dp(14))
+                addView(LinearLayout(this@MainActivity).apply{
+                    orientation=LinearLayout.HORIZONTAL;gravity=android.view.Gravity.CENTER_VERTICAL
+                    val mark=TextView(this@MainActivity).apply{
+                        text=initials;textSize=27f;gravity=android.view.Gravity.CENTER;setTextColor(Color.WHITE)
+                        typeface=android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.BOLD)
+                        background=android.graphics.drawable.GradientDrawable().apply{setColor(Color.argb(45,255,255,255));cornerRadius=dp(15).toFloat();setStroke(dp(1),Color.argb(100,255,255,255))}
+                    }
+                    addView(mark,LinearLayout.LayoutParams(dp(48),dp(48)))
+                    addView(LinearLayout(this@MainActivity).apply{
+                        orientation=LinearLayout.VERTICAL;setPadding(dp(11),0,0,0)
+                        addView(txt("FEATURED COMPANY",9,Color.rgb(230,232,238),true))
+                        addView(txt(name.uppercase(Locale.US),14,Color.WHITE,true,4))
+                    },LinearLayout.LayoutParams(0,-2,1f))
+                })
+                addView(txt("COMPANY PROFILE  •  OFFICIAL INFORMATION",9,Color.rgb(239,224,197),true,dp(14)))
+            }
+            addView(content,android.widget.FrameLayout.LayoutParams(-1,-1))
         }
     }
     private fun amt(key:String)=p.getFloat(key,0f)
