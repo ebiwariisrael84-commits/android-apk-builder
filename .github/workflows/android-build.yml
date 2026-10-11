@@ -1,4 +1,4 @@
-name: Build Aviator Predictor v25 APK
+name: Build Aviator Predictor v27 APK
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  build-aviator-v25:
+  build-aviator-v27:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -36,7 +36,7 @@ jobs:
       - name: Install Android SDK packages
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Extract Aviator Predictor v25 source
+      - name: Extract Aviator Predictor source for v27
         shell: bash
         run: |
           set -euo pipefail
@@ -47,7 +47,7 @@ jobs:
           test -f /tmp/aviator-v25/settings.gradle
           test -f /tmp/aviator-v25/AndroidManifest.xml
           test -f /tmp/aviator-v25/src/com/aviator/live/MainActivity.java
-          echo "Verified Aviator Predictor v25 source files."
+          echo "Verified Aviator Predictor source files for v27."
 
       - name: Apply session-learning and prediction audit updates
         shell: bash
@@ -227,10 +227,10 @@ jobs:
           manifest = Path("/tmp/aviator-v25/AndroidManifest.xml")
           m = manifest.read_text()
           m = m.replace('android:versionCode="25" android:versionName="25.0-Hybrid-Capture-Sports-UI"',
-                        'android:versionCode="26" android:versionName="26.0-History-First-Session-Learning"')
+                        'android:versionCode="27" android:versionName="27.0-Prediction-Always-Visible"')
           manifest.write_text(m)
           print("Updated source bytes:", len(s))
-          print("Set Android version to v26")
+          print("Set Android version to v27")
           PY
 
       - name: Inspect Aviator UI and OCR source for requested updates
@@ -271,10 +271,10 @@ jobs:
           test -f "$APK"
           ls -lh "$APK"
 
-      - name: Upload Aviator Predictor v25 APK
+      - name: Upload Aviator Predictor v27 APK
         uses: actions/upload-artifact@v4
         with:
-          name: Aviator-Predictor-v25-debug-APK
+          name: Aviator-Predictor-v27-debug-APK
           path: /tmp/aviator-v25/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
@@ -283,7 +283,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Aviator-Predictor-v25-build-reports
+          name: Aviator-Predictor-v27-build-reports
           path: /tmp/aviator-v25/build/reports/**
           if-no-files-found: ignore
           retention-days: 7
