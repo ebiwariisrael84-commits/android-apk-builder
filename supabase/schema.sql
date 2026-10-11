@@ -7,6 +7,8 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text not null,
   full_name text not null default '',
+  username text,
+  avatar_image_path text,
   country text,
   date_of_birth date,
   address text,
@@ -116,7 +118,8 @@ set search_path = public
 as $$
 begin
   insert into public.profiles (id,email,full_name)
-  values (new.id, coalesce(new.email,''), coalesce(new.raw_user_meta_data->>'full_name',''))
+  values (new.id, coalesce(new.email,''), coalesce(new.raw_user_meta_data->>'full_name',''),
+          coalesce(new.raw_user_meta_data->>'username',''))
   on conflict (id) do nothing;
   insert into public.wallet_accounts (user_id) values (new.id) on conflict (user_id) do nothing;
   return new;
@@ -208,7 +211,7 @@ create policy "profiles update own profile" on public.profiles for update to aut
 using (id=auth.uid() and role='investor' and account_status <> 'suspended')
 with check (id=auth.uid() and role='investor');
 revoke update on public.profiles from authenticated;
-grant update (full_name,country,date_of_birth,address,phone) on public.profiles to authenticated;
+grant update (full_name,country,date_of_birth,address,phone,avatar_image_path) on public.profiles to authenticated;
 
 drop policy if exists "plans visible to signed in users" on public.investment_plans;
 create policy "plans visible to signed in users" on public.investment_plans for select to authenticated using (is_active or public.is_admin());
