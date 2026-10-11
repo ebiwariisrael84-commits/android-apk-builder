@@ -571,8 +571,9 @@ class MainActivity : AppCompatActivity() {
         page.addView(txt("Companies associated with Elon Musk",19,ink,true,24))
         page.addView(txt("Explore company information and official links",13,muted,false,5))
         page.addView(card().apply {
-            addView(txt("Important investment notice",15,ink,true))
-            addView(txt("Evercrest Capital allocates deposits and investment contributions through its offline office operations toward acquiring shares or other eligible investment interests associated with these five Elon Musk-related companies.",12,muted,false,8))
+            addView(txt("Investment Notice",15,ink,true))
+            addView(txt("Evercrest Capital Investments provides investment opportunities related to five featured companies associated with Elon Musk.",12,muted,false,8))
+            addView(txt("Investment involves risk, including possible loss of capital.",10,Color.rgb(145,155,165),false,2))
         },mp(12))
         val muskCompanies = listOf(
             Triple("Tesla, Inc.","Electric vehicles, energy storage and AI • NASDAQ: TSLA","https://ir.tesla.com/"),
