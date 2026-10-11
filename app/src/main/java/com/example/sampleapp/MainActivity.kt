@@ -24,7 +24,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState:Bundle?) { super.onCreate(savedInstanceState); window.statusBarColor=bg; window.navigationBarColor=Color.WHITE; window.decorView.systemUiVisibility=View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR; if(p.getBoolean("logged",false)) dashboard() else auth(false) }
 
     private fun root(title:String,sub:String?=null):Pair<ScrollView,LinearLayout>{
-        val page=LinearLayout(this).apply{orientation=1;setPadding(dp(20),dp(20),dp(20),dp(28));setBackgroundColor(bg)}
+        val page=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(20),dp(20),dp(28));setBackgroundColor(bg)}
         val scroll=ScrollView(this).apply{addView(page)}
         page.addView(txt("MY INVEST",13,green,true));page.addView(txt(title,26,ink,true,8));if(sub!=null)page.addView(txt(sub,14,muted,false,5))
         return scroll to page
@@ -63,7 +63,7 @@ class MainActivity : AppCompatActivity() {
             addView(rowMetric("Available balance",money(available)));addView(rowMetric("Capital invested",money(capital)));addView(rowMetric("Profits",money(profits)));addView(rowMetric("Withdrawals",money(withdrawals)))
         },mp(22))
         page.addView(txt("Quick actions",19,ink,true,24))
-        page.addView(LinearLayout(this).apply{orientation=0;addView(btn("Withdraw",true){withdraw()},LinearLayout.LayoutParams(0,dp(48),1f));addView(gap(10),LinearLayout.LayoutParams(dp(10),1));addView(btn("Investment plans",false){plans()},LinearLayout.LayoutParams(0,dp(48),1f))},mp(12))
+        page.addView(LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;addView(btn("Withdraw",true){withdraw()},LinearLayout.LayoutParams(0,dp(48),1f));addView(gap(10),LinearLayout.LayoutParams(dp(10),1));addView(btn("Investment plans",false){plans()},LinearLayout.LayoutParams(0,dp(48),1f))},mp(12))
         page.addView(txt("S&P 500",19,ink,true,24))
         val market=card();market.addView(txt("S&P 500 index",16,ink,true));val status=txt(marketStatus,12,muted,false,4);market.addView(status)
         val chart=MarketLine(this);market.addView(chart,LinearLayout.LayoutParams(-1,dp(135)).apply{topMargin=dp(8)});val change=txt(marketChange,12,green,true,4);market.addView(change);page.addView(market,mp(12))
@@ -71,7 +71,7 @@ class MainActivity : AppCompatActivity() {
         page.addView(txt("Your investment",19,ink,true,24))
         page.addView(card().apply{val active=p.getString("active_plan",null);addView(txt(active?:"No active plan",17,ink,true));addView(txt(if(active==null)"Choose a plan to get started." else "Selected plan",13,muted,false,5));addView(btn(if(active==null)"Explore plans" else "View plans",false){plans()},mp(12))},mp(12))
         page.addView(txt("Account",19,ink,true,24))
-        page.addView(LinearLayout(this).apply{orientation=0;addView(btn("Transactions",false){transactions()},LinearLayout.LayoutParams(0,dp(46),1f));addView(gap(8),LinearLayout.LayoutParams(dp(8),1));addView(btn("Profile",false){profile()},LinearLayout.LayoutParams(0,dp(46),1f))},mp(12))
+        page.addView(LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;addView(btn("Transactions",false){transactions()},LinearLayout.LayoutParams(0,dp(46),1f));addView(gap(8),LinearLayout.LayoutParams(dp(8),1));addView(btn("Profile",false){profile()},LinearLayout.LayoutParams(0,dp(46),1f))},mp(12))
         setContentView(scroll)
     }
     private data class Plan(val name:String,val min:Float,val tagline:String,val details:String)
@@ -146,8 +146,8 @@ class MainActivity : AppCompatActivity() {
     private fun money(v:Float)="$"+String.format(Locale.US,"%,.2f",v)
     private fun hash(v:String)=MessageDigest.getInstance("SHA-256").digest(v.toByteArray()).joinToString(""){"%02x".format(it)}
     private fun input(h:String,type:Int=InputType.TYPE_CLASS_TEXT)=EditText(this).apply{hint=h;textSize=15f;setSingleLine(true);inputType=type;setPadding(dp(14),dp(12),dp(14),dp(12));setBackgroundColor(Color.WHITE)}
-    private fun card()=LinearLayout(this).apply{orientation=1;setPadding(dp(18),dp(18),dp(18),dp(18));setBackgroundColor(Color.WHITE);elevation=dp(2).toFloat()}
-    private fun rowMetric(label:String,value:String)=LinearLayout(this).apply{orientation=0;gravity=android.view.Gravity.CENTER_VERTICAL;addView(txt(label,13,Color.rgb(218,225,232),false),LinearLayout.LayoutParams(0,-2,1f));addView(txt(value,15,Color.WHITE,true));setPadding(0,dp(5),0,dp(5))}
+    private fun card()=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(18),dp(18),dp(18),dp(18));setBackgroundColor(Color.WHITE);elevation=dp(2).toFloat()}
+    private fun rowMetric(label:String,value:String)=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=android.view.Gravity.CENTER_VERTICAL;addView(txt(label,13,Color.rgb(218,225,232),false),LinearLayout.LayoutParams(0,-2,1f));addView(txt(value,15,Color.WHITE,true));setPadding(0,dp(5),0,dp(5))}
     private fun txt(s:String,size:Int,color:Int,bold:Boolean,top:Int=0)=TextView(this).apply{text=s;textSize=size.toFloat();setTextColor(color);if(bold)typeface=android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.BOLD);if(top>0)setPadding(0,dp(top),0,0)}
     private fun btn(label:String,primary:Boolean,click:()->Unit)=Button(this).apply{text=label;textSize=13f;isAllCaps=false;setTextColor(if(primary)Color.WHITE else green);backgroundTintList=android.content.res.ColorStateList.valueOf(if(primary)green else pale);setOnClickListener{click()}}
     private fun gap(w:Int)=View(this).apply{layoutParams=LinearLayout.LayoutParams(dp(w),1)}
