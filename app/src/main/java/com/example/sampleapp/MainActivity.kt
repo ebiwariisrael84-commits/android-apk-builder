@@ -42,17 +42,15 @@ class MainActivity : AppCompatActivity() {
         // Require credentials whenever the app is launched into a fresh Activity.
         // Do not restore a saved refresh token on startup; that caused a race where
         // the login screen briefly appeared and then opened the dashboard automatically.
-        if (savedInstanceState == null) {
-            p.edit()
-                .remove("cloud_access_token")
-                .remove("cloud_refresh_token")
-                .remove("cloud_user_id")
-                .putBoolean("logged", false)
-                .apply()
-            cloudAccessToken = null
-            cloudRefreshToken = null
-            cloudUserId = null
-        }
+        p.edit()
+            .remove("cloud_access_token")
+            .remove("cloud_refresh_token")
+            .remove("cloud_user_id")
+            .putBoolean("logged", false)
+            .apply()
+        cloudAccessToken = null
+        cloudRefreshToken = null
+        cloudUserId = null
         auth(false)
         val incoming=intent?.data
         if(incoming?.scheme=="myinvest" && incoming.host=="confirm-email") {
