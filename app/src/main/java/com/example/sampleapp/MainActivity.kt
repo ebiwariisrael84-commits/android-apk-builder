@@ -443,7 +443,9 @@ class MainActivity : AppCompatActivity() {
             if (tokenForAvatar != null && uidForAvatar != null) thread {
                 try {
                     val profileData = cloud.fetchProfileDetails(tokenForAvatar, uidForAvatar)
-                    val path = profileData.optString("avatar_image_path")
+                    // Prefer the saved avatar; for existing accounts, fall back to the latest KYC face photo.
+                    val savedPath = profileData.optString("avatar_image_path")
+                    val path = if (savedPath.isNotBlank()) savedPath else cloud.fetchLatestKycFacePath(tokenForAvatar, uidForAvatar)
                     if (path.isNotBlank()) {
                         val signed = cloud.signedKycUrl(tokenForAvatar, path)
                         val bitmap = URL(signed).openStream().use { BitmapFactory.decodeStream(it) }
@@ -636,21 +638,7 @@ class MainActivity : AppCompatActivity() {
         page.addView(card().apply{
             addView(txt(p.getString("account_name","Investor")?:"Investor",19,ink,true))
             addView(txt(p.getString("account_email","")?:"",14,muted,false,5))
-            addView(btn("Choose profile photo",false){pickKycImage(1003)},mp(10))
-            addView(txt(if(selectedAvatarImageUri==null)"Profile photo: current saved image" else "New profile photo selected",12,green,true,4))
-            addView(btn("Upload and save profile photo",true){
-                val avatarUri=selectedAvatarImageUri
-                if(token==null||uid==null) toast("Please sign in again.")
-                else if(avatarUri==null) toast("Choose a profile photo first.")
-                else thread {
-                    try {
-                        val bytes=contentResolver.openInputStream(avatarUri)?.use{it.readBytes()}?:throw Exception("Could not read profile image.")
-                        val path=cloud.uploadKycImage(token,uid,"avatar",bytes,contentResolver.getType(avatarUri)?: "image/jpeg")
-                        cloud.updateAvatarPath(token,path)
-                        runOnUiThread { selectedAvatarImageUri=null;toast("Profile photo saved.");profile() }
-                    } catch(e:Exception) { runOnUiThread { toast("Profile photo upload failed: "+(e.message ?: "Cloud error")) } }
-                }
-            },mp(8))
+            addView(txt("Your profile photo is taken automatically from the face photo submitted with KYC and appears here after identity approval.",12,muted,false,8))
             addView(profileStatus)
             addView(txt("Personal details",16,ink,true,14))
             addView(fullName,mp(8));addView(country,mp(8));addView(dob,mp(8));addView(address,mp(8));addView(phone,mp(8))
