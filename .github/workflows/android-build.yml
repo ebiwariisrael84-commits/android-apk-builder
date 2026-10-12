@@ -6,7 +6,6 @@ on:
       - aviator-v29-cloud-build
     paths:
       - 'Aviator-Predictor-v29-Welcome-Screen-source.zip'
-      - '.github/workflows/android-build.yml'
   workflow_dispatch:
 
 permissions:
