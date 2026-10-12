@@ -302,7 +302,7 @@ jobs:
           arch: x86_64
           profile: pixel_2
           script: |
-            set -euo pipefail
+            set -eu
             APK="$(find /tmp/aviator-v25/build/outputs/apk/debug -maxdepth 1 -name '*.apk' -print -quit)"
             adb install "$APK"
             adb shell am force-stop com.aviator.live
