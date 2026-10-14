@@ -1,11 +1,12 @@
-name: Aviator Predictor V29 Android Build
+name: Aviator Predictor V29 Cloud Sync Android Build
 
 on:
   push:
     branches:
       - aviator-v29-cloud-build
     paths:
-      - 'Aviator-Predictor-v29-Welcome-Screen-source.zip'
+      - 'Aviator-Predictor-v29-CloudSync-Fix-source.zip'
+      - '.github/workflows/android-build.yml'
   workflow_dispatch:
 
 permissions:
@@ -14,6 +15,7 @@ permissions:
 jobs:
   build-v29:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Check out build repository
         uses: actions/checkout@v4
@@ -21,8 +23,9 @@ jobs:
       - name: Require the V29 source archive
         shell: bash
         run: |
-          if [[ ! -f "Aviator-Predictor-v29-Welcome-Screen-source.zip" ]]; then
-            echo "::error::Missing Aviator-Predictor-v29-Welcome-Screen-source.zip. Upload the Version 29 source ZIP to the aviator-v29-cloud-build branch first."
+          ARCHIVE="Aviator-Predictor-v29-CloudSync-Fix-source.zip"
+          if [[ ! -f "$ARCHIVE" ]]; then
+            echo "::error::Missing $ARCHIVE in the repository root. Upload the repackaged Version 29 Cloud Sync source ZIP to the aviator-v29-cloud-build branch."
             exit 1
           fi
 
@@ -45,22 +48,23 @@ jobs:
           unzip -q /tmp/gradle-8.9-bin.zip -d /tmp
           echo "/tmp/gradle-8.9/bin" >> "$GITHUB_PATH"
 
-      - name: Extract Version 29 source
+      - name: Extract Version 29 source into isolated directory
         shell: bash
         run: |
-          mkdir -p /tmp/aviator-v29-source
-          unzip -q "Aviator-Predictor-v29-Welcome-Screen-source.zip" -d /tmp/aviator-v29-source
-          test -f /tmp/aviator-v29-source/build.gradle
-          test -f /tmp/aviator-v29-source/AndroidManifest.xml
-          cp -a /tmp/aviator-v29-source/. .
+          mkdir -p aviator-v29-source
+          unzip -q "Aviator-Predictor-v29-CloudSync-Fix-source.zip" -d aviator-v29-source
+          test -f aviator-v29-source/build.gradle
+          test -f aviator-v29-source/AndroidManifest.xml
+          test -f aviator-v29-source/src/com/aviator/live/MainActivity.java
+          grep -q "versionCode 29" aviator-v29-source/build.gradle
 
       - name: Build debug APK
-        run: gradle --no-daemon --stacktrace assembleDebug
+        run: gradle --no-daemon --stacktrace -p aviator-v29-source assembleDebug
 
       - name: Upload Version 29 debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Aviator-Predictor-v29-debug
-          path: build/outputs/apk/debug/*.apk
+          name: Aviator-Predictor-v29-CloudSync-debug
+          path: aviator-v29-source/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
