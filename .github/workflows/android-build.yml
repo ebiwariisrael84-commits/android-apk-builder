@@ -116,7 +116,10 @@ jobs:
               if old not in s:
                   raise SystemExit("Expected source pattern missing: " + label)
               s = s.replace(old, new, 1)
-          replace_once('    String cloudAccessToken="", cloudRefreshToken="";\\n', '    String cloudAccessToken="", cloudRefreshToken="";\\n    volatile long cloudAuthRetryAfterMs=0;\\n', 'cloud auth cooldown field')
+          if 'cloudAuthRetryAfterMs' not in s:
+              needle = 'cloudAccessToken="", cloudRefreshToken="";'
+              if needle not in s: raise SystemExit('Could not locate cloud token fields')
+              s = s.replace(needle, needle + '\n    volatile long cloudAuthRetryAfterMs=0;', 1)
           replace_once('prediction=text("ESTIMATE BAND WAITING FOR HISTORY",12,Color.WHITE); prediction.setTypeface(null,1); prediction.setGravity(Gravity.CENTER); prediction.setSingleLine(true); prediction.setEllipsize(android.text.TextUtils.TruncateAt.END); result.addView(prediction,new LinearLayout.LayoutParams(-1,dp(34)));', 'prediction=text("PREDICTED ROUND: waiting for history\\\\nESTIMATED BAND: collecting rounds",12,Color.WHITE); prediction.setTypeface(null,1); prediction.setGravity(Gravity.CENTER); prediction.setSingleLine(false); prediction.setMaxLines(2); prediction.setEllipsize(android.text.TextUtils.TruncateAt.END); result.addView(prediction,new LinearLayout.LayoutParams(-1,dp(54)));', 'two-line prediction view')
           replace_once('prediction.setText("ESTIMATE BAND NEEDS 5 COMPLETED ROUNDS");', 'prediction.setText("PREDICTED ROUND: waiting\\\\nESTIMATED BAND: need 5 completed rounds");', 'prediction waiting state')
           replace_once('prediction.setText("UPDATING STATISTICAL ESTIMATE…");', 'prediction.setText("PREDICTED ROUND: updating…\\\\nESTIMATED BAND: recalculating");', 'prediction busy state')
@@ -161,12 +164,12 @@ jobs:
           p.write_text(s)
           settings = Path("aviator-v29-source/settings.gradle")
           st = settings.read_text()
-          st = re.sub(r"rootProject\\.name\\s*=\\s*['\"][^'\"]*['\"]", "rootProject.name = 'AviatorPredictor-v29'", st)
+          st = '\n'.join("rootProject.name = 'AviatorPredictor-v29'" if line.strip().startsWith('rootProject.name') else line for line in st.split('\n'))
           settings.write_text(st)
           build = Path("aviator-v29-source/build.gradle")
           bg = build.read_text()
-          bg = re.sub(r"versionCode\\s+\\d+", "versionCode 29", bg, count=1)
-          bg = re.sub(r"versionName\\s+['\"][^'\"]*['\"]", "versionName '29.0-Welcome-Splash-CloudSync-Fix'", bg, count=1)
+          bg = '\n'.join('        versionCode 29' if line.strip().startsWith('versionCode ') else line for line in bg.split('\n'))
+          bg = '\n'.join("        versionName '29.0-Welcome-Splash-CloudSync-Fix'" if line.strip().startsWith('versionName ') else line for line in bg.split('\n'))
           build.write_text(bg)
           check = p.read_text()
           for token in ['PREDICTED ROUND %d:', 'ESTIMATED BAND:', 'cloudAuthRetryAfterMs', 'waiting for row change']:
