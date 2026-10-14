@@ -60,6 +60,14 @@ jobs:
           test -f aviator-v29-source/src/com/aviator/live/MainActivity.java
           grep -q "versionCode 29" aviator-v29-source/build.gradle
 
+      - name: Fix shortErr compiler parameter
+        shell: bash
+        run: |
+          FILE="aviator-v29-source/src/com/aviator/live/MainActivity.java"
+          grep -n "shortErr" "$FILE"
+          sed -i 's/shortErr(Exception/shortErr(Throwable/' "$FILE"
+          grep -q 'shortErr(Throwable' "$FILE" || { echo "::error::Could not apply shortErr type fix"; exit 1; }
+
       - name: Build debug APK
         run: gradle --no-daemon --stacktrace -p aviator-v29-source assembleDebug
 
