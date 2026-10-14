@@ -124,7 +124,7 @@ jobs:
           replace_once('prediction.setText("ESTIMATE BAND NEEDS 5 COMPLETED ROUNDS");', 'prediction.setText("PREDICTED ROUND: waiting\\\\nESTIMATED BAND: need 5 completed rounds");', 'prediction waiting state')
           replace_once('prediction.setText("UPDATING STATISTICAL ESTIMATE…");', 'prediction.setText("PREDICTED ROUND: updating…\\\\nESTIMATED BAND: recalculating");', 'prediction busy state')
           replace_once('prediction.setText(String.format(Locale.US,"ESTIMATE %.2fx  •  BAND %.2fx–%.2fx",z.center,z.lo,z.hi));', 'prediction.setText(String.format(Locale.US,"PREDICTED ROUND %d: %.2fx\\\\nESTIMATED BAND: %.2fx – %.2fx",count+1,z.center,z.lo,z.hi));', 'prediction target and band labels')
-          start = s.find('        int overlap=0, added=0;\\n        // New values are prepended.')
+          start = s.find('        int overlap=0, added=0;')
           if start < 0: raise SystemExit("Expected history overlap logic missing")
           end_marker = '        lastHistoryRow=new ArrayList<Double>(current);'
           end = s.find(end_marker, start)
