@@ -68,6 +68,41 @@ jobs:
           sed -i 's/shortErr(Exception/shortErr(Throwable/' "$FILE"
           grep -q 'shortErr(Throwable' "$FILE" || { echo "::error::Could not apply shortErr type fix"; exit 1; }
 
+      - name: Combine OPEN, CRAWL URL and RECONNECT into CONNECT
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("aviator-v29-source/src/com/aviator/live/MainActivity.java")
+          s = p.read_text()
+          old_ui = 'LinearLayout sb=new LinearLayout(this); Button open=button("OPEN"); Button fetch=button("CRAWL URL"); Button reconnect=button("RECONNECT"); sb.addView(open,new LinearLayout.LayoutParams(0,dp(46),1)); sb.addView(fetch,new LinearLayout.LayoutParams(0,dp(46),1)); sb.addView(reconnect,new LinearLayout.LayoutParams(0,dp(46),1)); source.addView(sb);'
+          new_ui = 'LinearLayout sb=new LinearLayout(this); Button connect=button("CONNECT"); sb.addView(connect,new LinearLayout.LayoutParams(-1,dp(48))); source.addView(sb);'
+          old_listeners = '''open.setOnClickListener(new View.OnClickListener(){public void onClick(View v){openBrowser(endpoint.getText().toString().trim());}});
+                  fetch.setOnClickListener(new View.OnClickListener(){public void onClick(View v){fetchLive();}});
+                  reconnect.setOnClickListener(new View.OnClickListener(){public void onClick(View v){reconnectCapture();}});'''
+          new_listeners = '''connect.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
+                      final String url=endpoint.getText().toString().trim();
+                      if(url.length()==0){status.setText("Enter the Aviator URL first");return;}
+                      if(!url.startsWith("https://")&&!url.startsWith("http://")){status.setText("URL must begin with https:// or http://");return;}
+                      openBrowser(url);
+                      startLive();
+                      if(!frameScanEnabled){frameScanEnabled=true;frameScanStatus.setText("Hybrid capture active • PixelCopy + WebView.draw + DOM");scheduleFrameCapture(150);}
+                      status.setText("CONNECT: opening Aviator, starting live crawl and capture, and syncing cloud data…");
+                      syncCloudQueue(); syncCloudLedger(); syncSharedCloudState(); requestCloudReestimate();
+                  }});'''
+          if old_ui not in s:
+              raise SystemExit("Expected v29 three-button UI was not found; refusing to build without patch.")
+          if old_listeners not in s:
+              raise SystemExit("Expected v29 three-button listeners were not found; refusing to build without patch.")
+          s = s.replace(old_ui, new_ui, 1).replace(old_listeners, new_listeners, 1)
+          if 'button("CRAWL URL")' in s or 'button("RECONNECT")' in s or 'button("OPEN")' in s:
+              raise SystemExit("Old buttons remain after patch.")
+          if 'button("CONNECT")' not in s:
+              raise SystemExit("Combined CONNECT button missing after patch.")
+          p.write_text(s)
+          print("Combined CONNECT button patch applied and verified.")
+          PY
+
       - name: Build debug APK
         run: gradle --no-daemon --stacktrace -p aviator-v29-source assembleDebug
 
