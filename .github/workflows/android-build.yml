@@ -83,7 +83,7 @@ jobs:
           new_listeners = '''connect.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
                       final String url=endpoint.getText().toString().trim();
                       if(url.length()==0){status.setText("Enter the Aviator URL first");return;}
-                      if(!url.startsWith("https://")&&!url.startsWith("http://")){status.setText("URL must begin with https:// or http://");return;}
+                      if(!url.startswith("https://")&&!url.startswith("http://")){status.setText("URL must begin with https:// or http://");return;}
                       openBrowser(url);
                       startLive();
                       if(!frameScanEnabled){frameScanEnabled=true;frameScanStatus.setText("Hybrid capture active • PixelCopy + WebView.draw + DOM");scheduleFrameCapture(150);}
@@ -164,12 +164,12 @@ jobs:
           p.write_text(s)
           settings = Path("aviator-v29-source/settings.gradle")
           st = settings.read_text()
-          st = '\n'.join("rootProject.name = 'AviatorPredictor-v29'" if line.strip().startsWith('rootProject.name') else line for line in st.split('\n'))
+          st = '\n'.join("rootProject.name = 'AviatorPredictor-v29'" if line.strip().startswith('rootProject.name') else line for line in st.split('\n'))
           settings.write_text(st)
           build = Path("aviator-v29-source/build.gradle")
           bg = build.read_text()
-          bg = '\n'.join('        versionCode 29' if line.strip().startsWith('versionCode ') else line for line in bg.split('\n'))
-          bg = '\n'.join("        versionName '29.0-Welcome-Splash-CloudSync-Fix'" if line.strip().startsWith('versionName ') else line for line in bg.split('\n'))
+          bg = '\n'.join('        versionCode 29' if line.strip().startswith('versionCode ') else line for line in bg.split('\n'))
+          bg = '\n'.join("        versionName '29.0-Welcome-Splash-CloudSync-Fix'" if line.strip().startswith('versionName ') else line for line in bg.split('\n'))
           build.write_text(bg)
           check = p.read_text()
           for token in ['PREDICTED ROUND %d:', 'ESTIMATED BAND:', 'cloudAuthRetryAfterMs', 'waiting for row change']:
