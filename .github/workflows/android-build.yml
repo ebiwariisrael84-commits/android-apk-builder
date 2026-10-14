@@ -83,7 +83,7 @@ jobs:
           new_listeners = '''connect.setOnClickListener(new View.OnClickListener(){public void onClick(View v){
                       final String url=endpoint.getText().toString().trim();
                       if(url.length()==0){status.setText("Enter the Aviator URL first");return;}
-                      if(!url.startswith("https://")&&!url.startswith("http://")){status.setText("URL must begin with https:// or http://");return;}
+                      if(!url.startsWith("https://")&&!url.startsWith("http://")){status.setText("URL must begin with https:// or http://");return;}
                       openBrowser(url);
                       startLive();
                       if(!frameScanEnabled){frameScanEnabled=true;frameScanStatus.setText("Hybrid capture active • PixelCopy + WebView.draw + DOM");scheduleFrameCapture(150);}
